@@ -1,5 +1,4 @@
-#[derive(Default)]
-struct CPURegister {
+pub struct CPU {
     // accumulator
     a: u8,
 
@@ -14,11 +13,19 @@ struct CPURegister {
     sp: u8,
 
     // status register;
+    // 7  bit  0
+    // ---- ----
+    // NV1B DIZC
+    // |||| ||||
+    // |||| |||+- Carry
+    // |||| ||+-- Zero
+    // |||| |+--- Interrupt Disable
+    // |||| +---- Decimal
+    // |||+------ (No CPU effect; see: the B flag)
+    // ||+------- (No CPU effect; always pushed as 1)
+    // |+-------- Overflow
+    // +--------- Negative
     p: u8,
-}
-
-pub struct CPU {
-    register: CPURegister,
 }
 
 pub enum Instruction {
@@ -27,7 +34,7 @@ pub enum Instruction {
 }
 
 pub enum AddressingMode {
-    Impl,
+    Imp,
     Acc,
     Imm,
     Zp,
@@ -48,23 +55,38 @@ pub struct OpCode {
 }
 
 trait MemoryBus {
-    fn read_byte(&mut self, addr: u16) -> u8;
+    fn read_byte(&self, addr: u16) -> u8;
+    fn read_word(&self, addr: u16) -> u16;
     fn write_byte(&mut self, addr: u16, value: u8);
+    fn write_word(&mut self, addr: u16, value: u16);
 }
 
 impl CPU {
     pub fn new() -> CPU {
         CPU {
-            register: CPURegister::default(),
+            a: 0,
+            x: 0,
+            y: 0,
+            pc: 0,
+            sp: 0,
+            p: 0,
         }
     }
 
-    pub fn step<B: MemoryBus>(&mut self, memory: &mut B) {
-        let opcode = memory.read_byte(self.register.pc);
+    pub fn step<T: MemoryBus>(&mut self, memory: &mut T) {
+        let value = memory.read_byte(self.pc);
+        self.pc += 1;
+        match self.decode(value) {
+            Some(opcode) => match opcode.instr {
+                Instruction::ADC => self.instr_adc(memory, opcode.mode),
+                _ => panic!(),
+            },
+            None => panic!(),
+        }
     }
 
     pub fn decode(&self, opcode: u8) -> Option<OpCode> {
-        match (opcode) {
+        match opcode {
             0x69 => Some(OpCode {
                 instr: Instruction::ADC,
                 mode: AddressingMode::Imm,
@@ -73,6 +95,66 @@ impl CPU {
             _ => None,
         }
     }
+
+    fn instr_adc<T: MemoryBus>(&mut self, memory: &mut T, addressing_mode: AddressingMode) {
+        let value = match addressing_mode {
+            AddressingMode::Imm => {
+                let arg = memory.read_byte(self.pc);
+                self.pc += 1;
+                arg
+            }
+            AddressingMode::Zp => {
+                let arg = memory.read_byte(self.pc);
+                self.pc += 1;
+                memory.read_byte((arg & 0x00FF).into())
+            }
+            AddressingMode::ZpX => {
+                let arg = memory.read_byte(self.pc);
+                self.pc += 1;
+                memory.read_byte(((arg + self.x) & 0x00FF).into())
+            }
+            AddressingMode::Abs => {
+                let arg = memory.read_word(self.pc);
+                self.pc += 2;
+                memory.read_byte(arg)
+            }
+            AddressingMode::AbsX => {
+                let arg = memory.read_word(self.pc);
+                self.pc += 2;
+                memory.read_byte(arg + (self.x as u16))
+            }
+            AddressingMode::AbsY => {
+                let arg = memory.read_word(self.pc);
+                self.pc += 2;
+                memory.read_byte(arg + (self.y as u16))
+            },
+            AddressingMode::IndX => {
+                let arg = memory.read_byte(self.pc);
+                self.pc += 1;
+                let addr = ((arg + self.x) & 0xFF) as u16;
+                memory.read_byte(memory.read_word(addr))
+            },
+            AddressingMode::IndY => {
+                let arg = memory.read_byte(self.pc);
+                self.pc += 1;
+                let low = memory.read_byte(arg as u16);
+                let high = memory.read_byte(((arg as u16) + 1) & 0xFF);
+                let base_addr = (high as u16) << 8 | low as u16;
+                memory.read_byte(base_addr)
+            }
+            _ => panic!(),
+        };
+
+        self.a += value + self.get_carry()
+
+        // TODO set flags
+    }
+
+    fn get_carry(&self) -> u8 {
+        self.p & 0x01
+    }
+
+    fn set_carry(&mut self, value: bool) {}
 }
 
 #[cfg(test)]
