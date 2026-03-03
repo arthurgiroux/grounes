@@ -24,7 +24,7 @@ bitflags! {
         const I = 0b00000100;
         const D = 0b00001000;
         const B = 0b00010000;
-        const O = 0b00100000;
+        const Unused = 0b00100000;
         const V = 0b01000000;
         const N = 0b10000000;
     }
@@ -149,6 +149,48 @@ impl CPU {
                 mode: AddressingMode::Imm,
                 value: opcode,
                 base_cycle: 2,
+            }),
+            0x65 => Some(OpCode {
+                instr: Instruction::ADC,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0x75 => Some(OpCode {
+                instr: Instruction::ADC,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x6D => Some(OpCode {
+                instr: Instruction::ADC,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x7D => Some(OpCode {
+                instr: Instruction::ADC,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x79 => Some(OpCode {
+                instr: Instruction::ADC,
+                mode: AddressingMode::AbsY,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x61 => Some(OpCode {
+                instr: Instruction::ADC,
+                mode: AddressingMode::IndX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x71 => Some(OpCode {
+                instr: Instruction::ADC,
+                mode: AddressingMode::IndY,
+                value: opcode,
+                base_cycle: 5,
             }),
             _ => None,
         }
