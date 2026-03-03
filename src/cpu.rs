@@ -23,8 +23,9 @@ bitflags! {
     }
 }
 
+#[derive(Debug)]
 pub struct CPU {
-    // accumulator
+    /// accumulator
     a: u8,
 
     // Indexes, used for several addressing modes
@@ -41,13 +42,13 @@ pub struct CPU {
     p: StatusRegister,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Instruction {
     ADC,
     AND,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AddressingMode {
     Imp,
     Acc,
@@ -63,26 +64,26 @@ pub enum AddressingMode {
     IndY,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Operand {
     Accumulator,
     Immediate(u8),
     Memory(u16, bool),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OpCode {
-    /// The instruction that will be executed from this opCode
+    /// The instruction that will be executed from this op code
     instr: Instruction,
-    /// The addressing mode,
+    /// The addressing mode, this will determine how to fetch the operand
     mode: AddressingMode,
     /// The value of the opcode
     value: u8,
-    /// The number of cycles taken from this opcode, additional cycles can be added depending on the addressing mode
+    /// The usual number of cycles that the CPU takes to execute this opcode, additional cycles can be added depending on the addressing mode
     base_cycle: u8,
 }
 
-trait MemoryBus {
+pub trait MemoryBus {
     fn read_byte(&self, addr: u16) -> u8;
     fn read_word(&self, addr: u16) -> u16;
     fn write_byte(&mut self, addr: u16, value: u8);
@@ -110,11 +111,13 @@ impl CPU {
         }
     }
 
+    /// Step the CPU: fetch the next instruction and execute it
+    /// returns the number of cycles it took
     pub fn step<T: MemoryBus>(&mut self, memory: &mut T) -> u8 {
         // Fetch the next instruction
         let value = self.fetch_byte(memory);
 
-        // Decode the instruction
+        // Decode it
         let opcode = match self.decode(value) {
             Some(op) => op,
             None => panic!(),
@@ -338,6 +341,7 @@ impl CPU {
         }
     }
 
+    /// ADC instruction: Adds the carry flag and an operand to the accumulator.
     fn instr_adc<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) {
         let value = match operand {
             Operand::Accumulator => self.a,
@@ -358,6 +362,7 @@ impl CPU {
         self.p.set(StatusRegister::N, (self.a & 0x80) != 0);
     }
 
+    /// AND instruction: bitwise and operation between the accumulator and the operand
     fn instr_and<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) {
         let value = match operand {
             Operand::Accumulator => self.a,
