@@ -46,6 +46,7 @@ pub struct CPU {
 pub enum Instruction {
     ADC,
     AND,
+    ASL,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,6 +134,7 @@ impl CPU {
         match opcode.instr {
             Instruction::ADC => self.instr_adc(memory, operand),
             Instruction::AND => self.instr_and(memory, operand),
+            Instruction::ASL => self.instr_asl(memory, operand),
             _ => panic!(),
         }
 
@@ -239,6 +241,38 @@ impl CPU {
                 mode: AddressingMode::IndY,
                 value: opcode,
                 base_cycle: 5,
+            }),
+            // --- END SECTION AND ---
+            // --- BEGING SECTION ASL ---
+            0x0A => Some(OpCode {
+                instr: Instruction::ASL,
+                mode: AddressingMode::Acc,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x06 => Some(OpCode {
+                instr: Instruction::ASL,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            0x16 => Some(OpCode {
+                instr: Instruction::ASL,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x0E => Some(OpCode {
+                instr: Instruction::ASL,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x1E => Some(OpCode {
+                instr: Instruction::ASL,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 7,
             }),
             // --- END SECTION AND ---
             _ => None,
@@ -373,6 +407,29 @@ impl CPU {
         self.a = self.a & value;
         self.p.set(StatusRegister::Z, self.a == 0);
         self.p.set(StatusRegister::N, self.a & 0x80 != 0);
+    }
+
+    /// ASL instruction: shifts all the bits of an operand one position to the left
+    /// highest bit will be put in the carry
+    fn instr_asl<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) {
+        let mut value = match operand {
+            Operand::Accumulator => self.a,
+            Operand::Memory(addr, _) => memory.read_byte(addr),
+            _ => panic!("Operand ${operand:?} not supported by this instruction."),
+        };
+
+        let shifted_value = value << 1;
+        self.p.set(StatusRegister::C, value & 0x80 != 0);
+        self.p.set(StatusRegister::Z, shifted_value == 0);
+        self.p.set(StatusRegister::N, shifted_value & 0x80 != 0);
+
+        match operand {
+            Operand::Accumulator => {
+                self.a = shifted_value;
+            }
+            Operand::Memory(addr, _) => memory.write_byte(addr, shifted_value),
+            _ => panic!("Operand ${operand:?} not supported by this instruction."),
+        };
     }
 }
 
