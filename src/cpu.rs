@@ -1,31 +1,24 @@
 use bitflags::bitflags;
 
 bitflags! {
-    /// Represents a set of flags.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     struct StatusRegister: u8 {
-
-    // status register;
-    // 7  bit  0
-    // ---- ----
-    // NV1B DIZC
-    // |||| ||||
-    // |||| |||+- Carry
-    // |||| ||+-- Zero
-    // |||| |+--- Interrupt Disable
-    // |||| +---- Decimal
-    // |||+------ (No CPU effect; see: the B flag)
-    // ||+------- (No CPU effect; always pushed as 1)
-    // |+-------- Overflow
-    // +--------- Negative
-
+        /// Carry flag: set after some operations if it carried over
         const C = 0b00000001;
+        /// Zero flag: set if the result of the last operation is zero
         const Z = 0b00000010;
+        /// Interrupt disabled: set if interrupts are disabled
         const I = 0b00000100;
+        /// Decimal flag: On NES decimal mode is disabled so this flag has no effect
         const D = 0b00001000;
+        /// Break flag: Set only when flags are pushed to the stack: 1 for BRK, 0 for IRQ/NMI.
+        /// The CPU does not maintain B in the live status register.
         const B = 0b00010000;
+        /// Unused flag: always pushed to 1
         const Unused = 0b00100000;
+        /// Overflow flag: set after some operations if it overflows
         const V = 0b01000000;
+        /// Negative flag: Set after some operations when the highest bit is set
         const N = 0b10000000;
     }
 }
@@ -113,7 +106,7 @@ impl CPU {
             y: 0,
             pc: 0,
             sp: 0,
-            p: StatusRegister::empty(),
+            p: StatusRegister::Unused,
         }
     }
 
