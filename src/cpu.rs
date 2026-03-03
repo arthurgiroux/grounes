@@ -129,6 +129,7 @@ impl CPU {
 
         match opcode.instr {
             Instruction::ADC => self.instr_adc(memory, operand),
+            Instruction::AND => self.instr_and(memory, operand),
             _ => panic!(),
         }
 
@@ -137,6 +138,7 @@ impl CPU {
 
     pub fn decode(&self, opcode: u8) -> Option<OpCode> {
         match opcode {
+            // --- BEGIN SECTION ADC ---
             0x69 => Some(OpCode {
                 instr: Instruction::ADC,
                 mode: AddressingMode::Imm,
@@ -185,6 +187,57 @@ impl CPU {
                 value: opcode,
                 base_cycle: 5,
             }),
+            // --- END SECTION ADC ---
+            // --- BEGING SECTION AND ---
+            0x29 => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::Imm,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x25 => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0x35 => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x2D => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x3D => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x39 => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::AbsY,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x21 => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::IndX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x31 => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::IndY,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            // --- END SECTION AND ---
             _ => None,
         }
     }
@@ -212,6 +265,7 @@ impl CPU {
             }
         }
     }
+
     fn get_operand_address<T: MemoryBus>(
         &mut self,
         memory: &T,
@@ -302,6 +356,18 @@ impl CPU {
             ((self.a ^ prev_value) & (self.a ^ value) & 0x80) != 0,
         );
         self.p.set(StatusRegister::N, (self.a & 0x80) != 0);
+    }
+
+    fn instr_and<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) {
+        let value = match operand {
+            Operand::Accumulator => self.a,
+            Operand::Immediate(val) => val,
+            Operand::Memory(addr, _) => memory.read_byte(addr),
+        };
+
+        self.a = self.a & value;
+        self.p.set(StatusRegister::Z, self.a == 0);
+        self.p.set(StatusRegister::N, self.a & 0x80 != 0);
     }
 }
 
