@@ -1,16 +1,9 @@
-pub struct CPU {
-    // accumulator
-    a: u8,
+use bitflags::bitflags;
 
-    // Indexes, used for several addressing modes
-    x: u8,
-    y: u8,
-
-    // Program counter
-    pc: u16,
-
-    // stack pointer
-    sp: u8,
+bitflags! {
+    /// Represents a set of flags.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    struct StatusRegister: u8 {
 
     // status register;
     // 7  bit  0
@@ -25,7 +18,34 @@ pub struct CPU {
     // ||+------- (No CPU effect; always pushed as 1)
     // |+-------- Overflow
     // +--------- Negative
-    p: u8,
+
+        const C = 0b00000001;
+        const Z = 0b00000010;
+        const I = 0b00000100;
+        const D = 0b00001000;
+        const B = 0b00010000;
+        const O = 0b00100000;
+        const V = 0b01000000;
+        const N = 0b10000000;
+    }
+}
+
+pub struct CPU {
+    // accumulator
+    a: u8,
+
+    // Indexes, used for several addressing modes
+    x: u8,
+    y: u8,
+
+    // Program counter
+    pc: u16,
+
+    // stack pointer
+    sp: u8,
+
+    // status register
+    p: StatusRegister,
 }
 
 #[derive(Debug)]
@@ -93,7 +113,7 @@ impl CPU {
             y: 0,
             pc: 0,
             sp: 0,
-            p: 0,
+            p: StatusRegister::empty(),
         }
     }
 
@@ -230,22 +250,24 @@ impl CPU {
     }
 
     fn instr_adc<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) {
-        // TODO set flags
         let value = match operand {
             Operand::Accumulator => self.a,
             Operand::Immediate(val) => val,
             Operand::Memory(addr, _) => memory.read_byte(addr),
         };
 
-        let result: u16 = self.a as u16 + value as u16 + self.get_carry() as u16;
+        let result: u16 = self.a as u16 + value as u16 + self.p.contains(StatusRegister::C) as u16;
+        let prev_value = self.a;
         self.a = result as u8;
+        self.p.set(StatusRegister::C, result > 0xFF);
+        self.p.set(StatusRegister::Z, self.a == 0);
+        // If the result's sign is different from both A's and memory's, signed overflow (or underflow) occurred.
+        self.p.set(
+            StatusRegister::V,
+            ((self.a ^ prev_value) & (self.a ^ value) & 0x80) != 0,
+        );
+        self.p.set(StatusRegister::N, (self.a & 0x80) != 0);
     }
-
-    fn get_carry(&self) -> u8 {
-        self.p & 0x01
-    }
-
-    fn set_carry(&mut self, value: bool) {}
 }
 
 #[cfg(test)]
