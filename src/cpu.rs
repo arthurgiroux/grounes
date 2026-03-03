@@ -28,6 +28,7 @@ pub struct CPU {
     p: u8,
 }
 
+#[derive(Debug)]
 pub enum Instruction {
     ADC,
     AND,
@@ -49,10 +50,23 @@ pub enum AddressingMode {
     IndY,
 }
 
+#[derive(Debug)]
+enum Operand {
+    Accumulator,
+    Immediate(u8),
+    Memory(u16, bool),
+}
+
+#[derive(Debug)]
 pub struct OpCode {
+    /// The instruction that will be executed from this opCode
     instr: Instruction,
+    /// The addressing mode,
     mode: AddressingMode,
+    /// The value of the opcode
     value: u8,
+    /// The number of cycles taken from this opcode, additional cycles can be added depending on the addressing mode
+    base_cycle: u8,
 }
 
 trait MemoryBus {
@@ -60,6 +74,10 @@ trait MemoryBus {
     fn read_word(&self, addr: u16) -> u16;
     fn write_byte(&mut self, addr: u16, value: u8);
     fn write_word(&mut self, addr: u16, value: u16);
+}
+
+fn word_from_bytes(low: u8, high: u8) -> u16 {
+    (high as u16) << 8 | low as u16
 }
 
 /// A memory page is crossed after an increment operation when the high-byte is increased.
@@ -79,16 +97,29 @@ impl CPU {
         }
     }
 
-    pub fn step<T: MemoryBus>(&mut self, memory: &mut T) {
-        let value = memory.read_byte(self.pc);
-        self.pc += 1;
-        match self.decode(value) {
-            Some(opcode) => match opcode.instr {
-                Instruction::ADC => self.instr_adc(memory, opcode.mode),
-                _ => panic!(),
-            },
+    pub fn step<T: MemoryBus>(&mut self, memory: &mut T) -> u8 {
+        // Fetch the next instruction
+        let value = self.fetch_byte(memory);
+
+        // Decode the instruction
+        let opcode = match self.decode(value) {
+            Some(op) => op,
             None => panic!(),
+        };
+
+        let operand = self.resolve_operand(memory, opcode.mode);
+
+        // If we crossed a memory page, we need do add an extra cycle
+        let extra_cycles = matches!(&operand, Operand::Memory(_, true))
+            .then_some(1)
+            .unwrap_or(0);
+
+        match opcode.instr {
+            Instruction::ADC => self.instr_adc(memory, operand),
+            _ => panic!(),
         }
+
+        opcode.base_cycle + extra_cycles
     }
 
     pub fn decode(&self, opcode: u8) -> Option<OpCode> {
@@ -97,6 +128,7 @@ impl CPU {
                 instr: Instruction::ADC,
                 mode: AddressingMode::Imm,
                 value: opcode,
+                base_cycle: 2,
             }),
             _ => None,
         }
@@ -112,9 +144,19 @@ impl CPU {
         let low = memory.read_byte(self.pc);
         let high = memory.read_byte(self.pc + 1);
         self.pc += 2;
-        ((high as u16) << 8) | low as u16
+        word_from_bytes(low, high)
     }
 
+    fn resolve_operand<T: MemoryBus>(&mut self, memory: &T, mode: AddressingMode) -> Operand {
+        match mode {
+            AddressingMode::Imm => Operand::Immediate(self.fetch_byte(memory)),
+            AddressingMode::Acc => Operand::Accumulator,
+            _ => {
+                let (addr, page_crossed) = self.get_operand_address(memory, mode);
+                Operand::Memory(addr, page_crossed)
+            }
+        }
+    }
     fn get_operand_address<T: MemoryBus>(
         &mut self,
         memory: &T,
@@ -164,7 +206,7 @@ impl CPU {
                     arg + 1
                 };
                 let high = memory.read_byte(high_addr);
-                let addr = ((high as u16) << 8) | low as u16;
+                let addr = word_from_bytes(low, high);
                 (addr, false)
             }
             AddressingMode::IndX => {
@@ -172,14 +214,14 @@ impl CPU {
                 let ptr = arg.wrapping_add(self.x);
                 let low = memory.read_byte(ptr as u16);
                 let high = memory.read_byte(ptr.wrapping_add(1) as u16);
-                let addr = (high as u16) << 8 | low as u16;
+                let addr = word_from_bytes(low, high);
                 (addr, false)
             }
             AddressingMode::IndY => {
                 let arg = self.fetch_byte(memory);
                 let low = memory.read_byte(arg as u16);
                 let high = memory.read_byte(arg.wrapping_add(1) as u16);
-                let base_addr = (high as u16) << 8 | low as u16;
+                let base_addr = word_from_bytes(low, high);
                 let addr = base_addr.wrapping_add(self.y as u16);
                 (addr, is_page_crossed(base_addr, addr))
             }
@@ -187,8 +229,16 @@ impl CPU {
         }
     }
 
-    fn instr_adc<T: MemoryBus>(&mut self, memory: &mut T, addressing_mode: AddressingMode) {
+    fn instr_adc<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) {
         // TODO set flags
+        let value = match operand {
+            Operand::Accumulator => self.a,
+            Operand::Immediate(val) => val,
+            Operand::Memory(addr, _) => memory.read_byte(addr),
+        };
+
+        let result: u16 = self.a as u16 + value as u16 + self.get_carry() as u16;
+        self.a = result as u8;
     }
 
     fn get_carry(&self) -> u8 {
@@ -209,7 +259,7 @@ mod tests {
     impl MockMemory {
         fn new() -> Self {
             MockMemory {
-                memory: vec![0; 0xFFFF],
+                memory: vec![0; 0x10000],
             }
         }
     }
@@ -220,8 +270,7 @@ mod tests {
         }
 
         fn read_word(&self, addr: u16) -> u16 {
-            return (self.memory[addr as usize] as u16)
-                | ((self.memory[(addr + 1) as usize] as u16) << 8);
+            word_from_bytes(self.memory[addr as usize], self.memory[(addr + 1) as usize])
         }
 
         fn write_byte(&mut self, addr: u16, value: u8) {
@@ -243,7 +292,8 @@ mod tests {
             Some(OpCode {
                 instr: Instruction::ADC,
                 mode: AddressingMode::Imm,
-                value: 0x69
+                value: 0x69,
+                base_cycle: 2
             })
         ));
     }
