@@ -47,6 +47,7 @@ pub enum Instruction {
     ADC,
     AND,
     ASL,
+    BCC,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,6 +62,7 @@ pub enum AddressingMode {
     AbsX,
     AbsY,
     Ind,
+    Rel,
     IndX,
     IndY,
 }
@@ -70,11 +72,12 @@ enum Operand {
     Accumulator,
     Immediate(u8),
     Memory(u16, bool),
+    Relative(i8),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OpCode {
-    /// The instruction that will be executed from this op code
+    /// The instruction that will be executed from this opcode
     instr: Instruction,
     /// The addressing mode, this will determine how to fetch the operand
     mode: AddressingMode,
@@ -108,7 +111,7 @@ impl CPU {
             y: 0,
             pc: 0,
             sp: 0,
-            p: StatusRegister::Unused,
+            p: StatusRegister::empty(),
         }
     }
 
@@ -126,19 +129,14 @@ impl CPU {
 
         let operand = self.resolve_operand(memory, opcode.mode);
 
-        // If we crossed a memory page, we need do add an extra cycle
-        let extra_cycles = matches!(&operand, Operand::Memory(_, true))
-            .then_some(1)
-            .unwrap_or(0);
-
-        match opcode.instr {
+        let extra_cycles = match opcode.instr {
             Instruction::ADC => self.instr_adc(memory, operand),
             Instruction::AND => self.instr_and(memory, operand),
             Instruction::ASL => self.instr_asl(memory, operand),
-            _ => panic!(),
-        }
+            Instruction::BCC => self.instr_bcc(operand),
+        };
 
-        opcode.base_cycle + extra_cycles
+        opcode.base_cycle + extra_cycles.unwrap_or(0)
     }
 
     pub fn decode(&self, opcode: u8) -> Option<OpCode> {
@@ -193,7 +191,7 @@ impl CPU {
                 base_cycle: 5,
             }),
             // --- END SECTION ADC ---
-            // --- BEGING SECTION AND ---
+            // --- BEGIN SECTION AND ---
             0x29 => Some(OpCode {
                 instr: Instruction::AND,
                 mode: AddressingMode::Imm,
@@ -243,7 +241,7 @@ impl CPU {
                 base_cycle: 5,
             }),
             // --- END SECTION AND ---
-            // --- BEGING SECTION ASL ---
+            // --- BEGIN SECTION ASL ---
             0x0A => Some(OpCode {
                 instr: Instruction::ASL,
                 mode: AddressingMode::Acc,
@@ -275,6 +273,14 @@ impl CPU {
                 base_cycle: 7,
             }),
             // --- END SECTION AND ---
+            // --- BEGIN SECTION BCC ---
+            0x90 => Some(OpCode {
+                instr: Instruction::BCC,
+                mode: AddressingMode::Rel,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            // --- END SECTION BCC ---
             _ => None,
         }
     }
@@ -296,6 +302,7 @@ impl CPU {
         match mode {
             AddressingMode::Imm => Operand::Immediate(self.fetch_byte(memory)),
             AddressingMode::Acc => Operand::Accumulator,
+            AddressingMode::Rel => Operand::Relative(self.fetch_byte(memory) as i8),
             _ => {
                 let (addr, page_crossed) = self.get_operand_address(memory, mode);
                 Operand::Memory(addr, page_crossed)
@@ -344,7 +351,7 @@ impl CPU {
                 // 6502 indirect jump bug:
                 // when the address is at the end of page, the CPU fails to increment the page when reading the second byte.
                 // Instead, it will wraps to the beginning of the page, reading the wrong address.
-                // For eample JMP ($03FF) reads $03FF and $0300 instead of $0400
+                // For example JMP ($03FF) reads $03FF and $0300 instead of $0400
                 // We need to replicate this behavior to ensure correctness.
                 let high_addr = if (arg & 0x00FF) == 0x00FF {
                     arg & 0xFF00
@@ -376,11 +383,12 @@ impl CPU {
     }
 
     /// ADC instruction: Adds the carry flag and an operand to the accumulator.
-    fn instr_adc<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) {
+    fn instr_adc<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) -> Option<u8> {
         let value = match operand {
             Operand::Accumulator => self.a,
             Operand::Immediate(val) => val,
             Operand::Memory(addr, _) => memory.read_byte(addr),
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
         let result: u16 = self.a as u16 + value as u16 + self.p.contains(StatusRegister::C) as u16;
@@ -394,28 +402,35 @@ impl CPU {
             ((self.a ^ prev_value) & (self.a ^ value) & 0x80) != 0,
         );
         self.p.set(StatusRegister::N, (self.a & 0x80) != 0);
+
+        // If we crossed a memory page, we need do add an extra cycle
+        matches!(&operand, Operand::Memory(_, true)).then_some(1)
     }
 
     /// AND instruction: bitwise and operation between the accumulator and the operand
-    fn instr_and<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) {
+    fn instr_and<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) -> Option<u8> {
         let value = match operand {
             Operand::Accumulator => self.a,
             Operand::Immediate(val) => val,
             Operand::Memory(addr, _) => memory.read_byte(addr),
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
         self.a = self.a & value;
         self.p.set(StatusRegister::Z, self.a == 0);
         self.p.set(StatusRegister::N, self.a & 0x80 != 0);
+
+        // If we crossed a memory page, we need do add an extra cycle
+        matches!(&operand, Operand::Memory(_, true)).then_some(1)
     }
 
     /// ASL instruction: shifts all the bits of an operand one position to the left
     /// highest bit will be put in the carry
-    fn instr_asl<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) {
-        let mut value = match operand {
+    fn instr_asl<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) -> Option<u8> {
+        let value = match operand {
             Operand::Accumulator => self.a,
             Operand::Memory(addr, _) => memory.read_byte(addr),
-            _ => panic!("Operand ${operand:?} not supported by this instruction."),
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
         let shifted_value = value << 1;
@@ -428,8 +443,27 @@ impl CPU {
                 self.a = shifted_value;
             }
             Operand::Memory(addr, _) => memory.write_byte(addr, shifted_value),
-            _ => panic!("Operand ${operand:?} not supported by this instruction."),
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
+
+        None
+    }
+
+    /// instruction BCC: If the carry flag is clear, BCC branches to a nearby location by adding the relative offset to the program counter.
+    fn instr_bcc(&mut self, operand: Operand) -> Option<u8> {
+        let value = match operand {
+            Operand::Relative(val) => val,
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        };
+
+        if !self.p.contains(StatusRegister::C) {
+            let prev_pc = self.pc;
+            self.pc = self.pc.wrapping_add_signed(value.into());
+            let page_crossed = is_page_crossed(prev_pc, self.pc);
+            Some(if page_crossed { 2 } else { 1 })
+        } else {
+            None
+        }
     }
 }
 
