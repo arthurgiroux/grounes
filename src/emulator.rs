@@ -6,6 +6,8 @@ pub struct Emulator {
 
 impl Emulator {
     pub fn new() -> Emulator {
-        Emulator { cpu: CPU::new() }
+        Emulator {
+            cpu: CPU::default(),
+        }
     }
 }

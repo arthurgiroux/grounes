@@ -103,6 +103,12 @@ fn is_page_crossed(base_addr: u16, incremented_addr: u16) -> bool {
     (base_addr & 0xFF00) != (incremented_addr & 0xFF00)
 }
 
+impl Default for CPU {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CPU {
     pub fn new() -> CPU {
         CPU {
@@ -122,11 +128,7 @@ impl CPU {
         let value = self.fetch_byte(memory);
 
         // Decode it
-        let opcode = match self.decode(value) {
-            Some(op) => op,
-            None => panic!(),
-        };
-
+        let opcode = self.decode(value).expect("Unknown opcode");
         let operand = self.resolve_operand(memory, opcode.mode);
 
         let extra_cycles = match opcode.instr {
@@ -136,7 +138,7 @@ impl CPU {
             Instruction::BCC => self.instr_bcc(operand),
         };
 
-        opcode.base_cycle + extra_cycles.unwrap_or(0)
+        opcode.base_cycle + extra_cycles.unwrap_or_default()
     }
 
     pub fn decode(&self, opcode: u8) -> Option<OpCode> {
@@ -272,7 +274,7 @@ impl CPU {
                 value: opcode,
                 base_cycle: 7,
             }),
-            // --- END SECTION AND ---
+            // --- END SECTION ASL ---
             // --- BEGIN SECTION BCC ---
             0x90 => Some(OpCode {
                 instr: Instruction::BCC,
@@ -416,7 +418,7 @@ impl CPU {
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
-        self.a = self.a & value;
+        self.a &= value;
         self.p.set(StatusRegister::Z, self.a == 0);
         self.p.set(StatusRegister::N, self.a & 0x80 != 0);
 
@@ -504,17 +506,16 @@ mod tests {
 
     #[test]
     fn decode_adc_should_give_correct_opcode() {
-        let cpu = CPU::new();
-        let decode = cpu.decode(0x69);
-        assert!(matches!(
-            decode,
+        let cpu = CPU::default();
+        assert_eq!(
+            cpu.decode(0x69),
             Some(OpCode {
                 instr: Instruction::ADC,
                 mode: AddressingMode::Imm,
                 value: 0x69,
                 base_cycle: 2
             })
-        ));
+        );
     }
 
     #[test]
