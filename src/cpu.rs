@@ -44,7 +44,6 @@ pub struct CPU {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Instruction {
-    ADC,
     AND,
     ASL,
     // Branch operation
@@ -56,6 +55,9 @@ pub enum Instruction {
     BMI,
     BVC,
     BVS,
+    // Arithmetic
+    ADC,
+    SBC,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,6 +143,7 @@ impl CPU {
 
         let extra_cycles = match opcode.instr {
             Instruction::ADC => self.instr_adc(memory, operand),
+            Instruction::SBC => self.instr_sbc(memory, operand),
             Instruction::AND => self.instr_and(memory, operand),
             Instruction::ASL => self.instr_asl(memory, operand),
             Instruction::BCC => {
@@ -224,6 +227,56 @@ impl CPU {
                 base_cycle: 5,
             }),
             // --- END SECTION ADC ---
+            // --- BEGIN SECTION SBC ---
+            0xE9 => Some(OpCode {
+                instr: Instruction::SBC,
+                mode: AddressingMode::Imm,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0xE5 => Some(OpCode {
+                instr: Instruction::SBC,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0xF5 => Some(OpCode {
+                instr: Instruction::SBC,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xED => Some(OpCode {
+                instr: Instruction::SBC,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xFD => Some(OpCode {
+                instr: Instruction::SBC,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xF9 => Some(OpCode {
+                instr: Instruction::SBC,
+                mode: AddressingMode::AbsY,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xE1 => Some(OpCode {
+                instr: Instruction::SBC,
+                mode: AddressingMode::IndX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0xF1 => Some(OpCode {
+                instr: Instruction::SBC,
+                mode: AddressingMode::IndY,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            // --- END SECTION SBC ---
             // --- BEGIN SECTION AND ---
             0x29 => Some(OpCode {
                 instr: Instruction::AND,
@@ -475,6 +528,31 @@ impl CPU {
         self.p.set(
             StatusRegister::V,
             ((self.a ^ prev_value) & (self.a ^ value) & 0x80) != 0,
+        );
+        self.p.set(StatusRegister::N, (self.a & 0x80) != 0);
+
+        // If we crossed a memory page, we need do add an extra cycle
+        matches!(&operand, Operand::Memory(_, true)).then_some(1)
+    }
+
+    /// SBC instruction: Subtract the NOT of the carry flag and an operand from the accumulator.
+    fn instr_sbc<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) -> Option<u8> {
+        let value = match operand {
+            Operand::Accumulator => self.a,
+            Operand::Immediate(val) => val,
+            Operand::Memory(addr, _) => memory.read_byte(addr),
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        };
+
+        let result: u16 = self.a as u16 - value as u16 - !self.p.contains(StatusRegister::C) as u16;
+        let prev_value = self.a;
+        self.a = result as u8;
+        self.p.set(StatusRegister::C, result >= 0x100);
+        self.p.set(StatusRegister::Z, self.a == 0);
+        // If the result's sign is different from both A's and memory's, signed overflow (or underflow) occurred.
+        self.p.set(
+            StatusRegister::V,
+            ((self.a ^ prev_value) & (self.a ^ !value) & 0x80) != 0,
         );
         self.p.set(StatusRegister::N, (self.a & 0x80) != 0);
 
