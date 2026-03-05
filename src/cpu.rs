@@ -70,6 +70,10 @@ pub enum Instruction {
     SBC,
     INC,
     DEC,
+    INX,
+    DEX,
+    INY,
+    DEY,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,6 +99,18 @@ enum Operand {
     Immediate(u8),
     Memory(u16, bool),
     Relative(i8),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Register {
+    X,
+    Y,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArithmeticOp {
+    Inc,
+    Dec,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -158,6 +174,10 @@ impl CPU {
             Instruction::SBC => self.instr_sbc(memory, operand),
             Instruction::INC => self.instr_inc(memory, operand),
             Instruction::DEC => self.instr_dec(memory, operand),
+            Instruction::INX => self.generic_register_arithmetic(Register::X, ArithmeticOp::Inc),
+            Instruction::DEX => self.generic_register_arithmetic(Register::X, ArithmeticOp::Dec),
+            Instruction::INY => self.generic_register_arithmetic(Register::Y, ArithmeticOp::Inc),
+            Instruction::DEY => self.generic_register_arithmetic(Register::Y, ArithmeticOp::Dec),
             Instruction::AND => self.instr_and(memory, operand),
             Instruction::ASL => self.instr_asl(memory, operand),
             Instruction::BCC => {
@@ -316,6 +336,18 @@ impl CPU {
                 value: opcode,
                 base_cycle: 7,
             }),
+            0xE8 => Some(OpCode {
+                instr: Instruction::INX,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0xC8 => Some(OpCode {
+                instr: Instruction::INY,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
             // --- END SECTION INC ---
             // --- BEGIN SECTION DEC ---
             0xC6 => Some(OpCode {
@@ -341,6 +373,18 @@ impl CPU {
                 mode: AddressingMode::AbsX,
                 value: opcode,
                 base_cycle: 7,
+            }),
+            0xCA => Some(OpCode {
+                instr: Instruction::DEX,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x88 => Some(OpCode {
+                instr: Instruction::DEY,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
             }),
             // --- END SECTION DEC ---
             // --- BEGIN SECTION AND ---
@@ -693,6 +737,25 @@ impl CPU {
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
+        None
+    }
+
+    fn generic_register_arithmetic(
+        &mut self,
+        register: Register,
+        operation: ArithmeticOp,
+    ) -> Option<u8> {
+        let reg = match register {
+            Register::X => &mut self.x,
+            Register::Y => &mut self.y,
+        };
+        *reg = match operation {
+            ArithmeticOp::Inc => (*reg).wrapping_add(1),
+            ArithmeticOp::Dec => (*reg).wrapping_sub(1),
+        };
+
+        self.p.update_negative_flag(*reg);
+        self.p.update_zero_flag(*reg);
         None
     }
 
