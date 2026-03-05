@@ -23,6 +23,16 @@ bitflags! {
     }
 }
 
+impl StatusRegister {
+    fn update_zero_flag(&mut self, value: u8) {
+        self.set(StatusRegister::Z, value == 0);
+    }
+
+    fn update_negative_flag(&mut self, value: u8) {
+        self.set(StatusRegister::N, (value & 0x80) > 0);
+    }
+}
+
 #[derive(Debug)]
 pub struct CPU {
     /// accumulator
@@ -579,13 +589,13 @@ impl CPU {
         let prev_value = self.a;
         self.a = result as u8;
         self.p.set(StatusRegister::C, result > 0xFF);
-        self.p.set(StatusRegister::Z, self.a == 0);
+        self.p.update_zero_flag(self.a);
         // If the result's sign is different from both A's and memory's, signed overflow (or underflow) occurred.
         self.p.set(
             StatusRegister::V,
             ((self.a ^ prev_value) & (self.a ^ value) & 0x80) != 0,
         );
-        self.p.set(StatusRegister::N, (self.a & 0x80) != 0);
+        self.p.update_negative_flag(self.a);
 
         // If we crossed a memory page, we need do add an extra cycle
         matches!(&operand, Operand::Memory(_, true)).then_some(1)
@@ -604,13 +614,13 @@ impl CPU {
         let prev_value = self.a;
         self.a = result as u8;
         self.p.set(StatusRegister::C, result >= 0x100);
-        self.p.set(StatusRegister::Z, self.a == 0);
+        self.p.update_zero_flag(self.a);
         // If the result's sign is different from both A's and memory's, signed overflow (or underflow) occurred.
         self.p.set(
             StatusRegister::V,
             ((self.a ^ prev_value) & (self.a ^ !value) & 0x80) != 0,
         );
-        self.p.set(StatusRegister::N, (self.a & 0x80) != 0);
+        self.p.update_negative_flag(self.a);
 
         // If we crossed a memory page, we need do add an extra cycle
         matches!(&operand, Operand::Memory(_, true)).then_some(1)
@@ -622,8 +632,8 @@ impl CPU {
             Operand::Memory(addr, _) => {
                 let value = memory.read_byte(addr).wrapping_add(1);
                 memory.write_byte(addr, value);
-                self.p.set(StatusRegister::Z, value == 0);
-                self.p.set(StatusRegister::N, (value & 0x80) != 0);
+                self.p.update_zero_flag(value);
+                self.p.update_negative_flag(value);
             }
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         }
@@ -636,8 +646,8 @@ impl CPU {
             Operand::Memory(addr, _) => {
                 let value = memory.read_byte(addr).wrapping_sub(1);
                 memory.write_byte(addr, value);
-                self.p.set(StatusRegister::Z, value == 0);
-                self.p.set(StatusRegister::N, (value & 0x80) != 0);
+                self.p.update_zero_flag(self.a);
+                self.p.update_negative_flag(self.a);
             }
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         }
@@ -654,8 +664,8 @@ impl CPU {
         };
 
         self.a &= value;
-        self.p.set(StatusRegister::Z, self.a == 0);
-        self.p.set(StatusRegister::N, self.a & 0x80 != 0);
+        self.p.update_zero_flag(self.a);
+        self.p.update_negative_flag(self.a);
 
         // If we crossed a memory page, we need do add an extra cycle
         matches!(&operand, Operand::Memory(_, true)).then_some(1)
@@ -672,8 +682,8 @@ impl CPU {
 
         let shifted_value = value << 1;
         self.p.set(StatusRegister::C, value & 0x80 != 0);
-        self.p.set(StatusRegister::Z, shifted_value == 0);
-        self.p.set(StatusRegister::N, shifted_value & 0x80 != 0);
+        self.p.update_zero_flag(shifted_value);
+        self.p.update_negative_flag(shifted_value);
 
         match operand {
             Operand::Accumulator => {
