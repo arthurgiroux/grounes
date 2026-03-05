@@ -58,6 +58,7 @@ pub enum Instruction {
     // Arithmetic
     ADC,
     SBC,
+    INC,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,6 +145,7 @@ impl CPU {
         let extra_cycles = match opcode.instr {
             Instruction::ADC => self.instr_adc(memory, operand),
             Instruction::SBC => self.instr_sbc(memory, operand),
+            Instruction::INC => self.instr_inc(memory, operand),
             Instruction::AND => self.instr_and(memory, operand),
             Instruction::ASL => self.instr_asl(memory, operand),
             Instruction::BCC => {
@@ -277,6 +279,32 @@ impl CPU {
                 base_cycle: 5,
             }),
             // --- END SECTION SBC ---
+            // --- BEGIN SECTION INC ---
+            0xE6 => Some(OpCode {
+                instr: Instruction::INC,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            0xF6 => Some(OpCode {
+                instr: Instruction::INC,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0xEE => Some(OpCode {
+                instr: Instruction::INC,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0xFE => Some(OpCode {
+                instr: Instruction::INC,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 7,
+            }),
+            // --- END SECTION INC ---
             // --- BEGIN SECTION AND ---
             0x29 => Some(OpCode {
                 instr: Instruction::AND,
@@ -558,6 +586,20 @@ impl CPU {
 
         // If we crossed a memory page, we need do add an extra cycle
         matches!(&operand, Operand::Memory(_, true)).then_some(1)
+    }
+
+    /// INC instruction: Adds 1 to a memory location.
+    fn instr_inc<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) -> Option<u8> {
+        match operand {
+            Operand::Memory(addr, _) => {
+                let value = memory.read_byte(addr).wrapping_add(1);
+                memory.write_byte(addr, value);
+                self.p.set(StatusRegister::Z, value == 0);
+                self.p.set(StatusRegister::N, (value & 0x80) != 0);
+            }
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        }
+        None
     }
 
     /// AND instruction: bitwise and operation between the accumulator and the operand
