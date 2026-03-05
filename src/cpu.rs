@@ -48,6 +48,7 @@ pub enum Instruction {
     AND,
     ASL,
     BCC,
+    BCS,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -136,6 +137,7 @@ impl CPU {
             Instruction::AND => self.instr_and(memory, operand),
             Instruction::ASL => self.instr_asl(memory, operand),
             Instruction::BCC => self.instr_bcc(operand),
+            Instruction::BCS => self.instr_bcs(operand),
         };
 
         opcode.base_cycle + extra_cycles.unwrap_or_default()
@@ -283,6 +285,14 @@ impl CPU {
                 base_cycle: 2,
             }),
             // --- END SECTION BCC ---
+            // --- BEGIN SECTION BCS ---
+            0xB0 => Some(OpCode {
+                instr: Instruction::BCS,
+                mode: AddressingMode::Rel,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            // --- END SECTION BCS ---
             _ => None,
         }
     }
@@ -451,14 +461,13 @@ impl CPU {
         None
     }
 
-    /// instruction BCC: If the carry flag is clear, BCC branches to a nearby location by adding the relative offset to the program counter.
-    fn instr_bcc(&mut self, operand: Operand) -> Option<u8> {
+    fn generic_instr_branch(&mut self, operand: Operand, should_branch: bool) -> Option<u8> {
         let value = match operand {
             Operand::Relative(val) => val,
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
-        if !self.p.contains(StatusRegister::C) {
+        if should_branch {
             let prev_pc = self.pc;
             self.pc = self.pc.wrapping_add_signed(value.into());
             let page_crossed = is_page_crossed(prev_pc, self.pc);
@@ -466,6 +475,15 @@ impl CPU {
         } else {
             None
         }
+    }
+    /// instruction BCC: If the carry flag is clear, BCC branches to a nearby location by adding the relative offset to the program counter.
+    fn instr_bcc(&mut self, operand: Operand) -> Option<u8> {
+        self.generic_instr_branch(operand, !self.p.contains(StatusRegister::C))
+    }
+
+    /// instruction BCS: If the carry flag is set, BCC branches to a nearby location by adding the relative offset to the program counter.
+    fn instr_bcs(&mut self, operand: Operand) -> Option<u8> {
+        self.generic_instr_branch(operand, self.p.contains(StatusRegister::C))
     }
 }
 
