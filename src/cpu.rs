@@ -59,6 +59,7 @@ pub enum Instruction {
     ADC,
     SBC,
     INC,
+    DEC,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -146,6 +147,7 @@ impl CPU {
             Instruction::ADC => self.instr_adc(memory, operand),
             Instruction::SBC => self.instr_sbc(memory, operand),
             Instruction::INC => self.instr_inc(memory, operand),
+            Instruction::DEC => self.instr_dec(memory, operand),
             Instruction::AND => self.instr_and(memory, operand),
             Instruction::ASL => self.instr_asl(memory, operand),
             Instruction::BCC => {
@@ -305,6 +307,32 @@ impl CPU {
                 base_cycle: 7,
             }),
             // --- END SECTION INC ---
+            // --- BEGIN SECTION DEC ---
+            0xC6 => Some(OpCode {
+                instr: Instruction::DEC,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            0xD6 => Some(OpCode {
+                instr: Instruction::DEC,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0xCE => Some(OpCode {
+                instr: Instruction::DEC,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0xDE => Some(OpCode {
+                instr: Instruction::DEC,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 7,
+            }),
+            // --- END SECTION DEC ---
             // --- BEGIN SECTION AND ---
             0x29 => Some(OpCode {
                 instr: Instruction::AND,
@@ -593,6 +621,20 @@ impl CPU {
         match operand {
             Operand::Memory(addr, _) => {
                 let value = memory.read_byte(addr).wrapping_add(1);
+                memory.write_byte(addr, value);
+                self.p.set(StatusRegister::Z, value == 0);
+                self.p.set(StatusRegister::N, (value & 0x80) != 0);
+            }
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        }
+        None
+    }
+
+    /// DEC instruction: Substracts 1 from a memory location.
+    fn instr_dec<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) -> Option<u8> {
+        match operand {
+            Operand::Memory(addr, _) => {
+                let value = memory.read_byte(addr).wrapping_sub(1);
                 memory.write_byte(addr, value);
                 self.p.set(StatusRegister::Z, value == 0);
                 self.p.set(StatusRegister::N, (value & 0x80) != 0);
