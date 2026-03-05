@@ -1,3 +1,5 @@
+use core::panic;
+
 use bitflags::bitflags;
 
 bitflags! {
@@ -74,6 +76,10 @@ pub enum Instruction {
     DEX,
     INY,
     DEY,
+    // Load
+    LDA,
+    LDX,
+    LDY,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,6 +111,7 @@ enum Operand {
 pub enum Register {
     X,
     Y,
+    A,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -204,6 +211,9 @@ impl CPU {
             Instruction::BVS => {
                 self.generic_instr_branch(operand, self.p.contains(StatusRegister::V))
             }
+            Instruction::LDA => self.generic_load(memory, Register::A, operand),
+            Instruction::LDX => self.generic_load(memory, Register::X, operand),
+            Instruction::LDY => self.generic_load(memory, Register::Y, operand),
         };
 
         opcode.base_cycle + extra_cycles.unwrap_or_default()
@@ -519,6 +529,116 @@ impl CPU {
                 base_cycle: 2,
             }),
             // --- END SECTION BRANCH ---
+            // --- BEGIN SECTION LOAD ---
+            0xA9 => Some(OpCode {
+                instr: Instruction::LDA,
+                mode: AddressingMode::Imm,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0xA5 => Some(OpCode {
+                instr: Instruction::LDA,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0xB5 => Some(OpCode {
+                instr: Instruction::LDA,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xAD => Some(OpCode {
+                instr: Instruction::LDA,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xBD => Some(OpCode {
+                instr: Instruction::LDA,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xB9 => Some(OpCode {
+                instr: Instruction::LDA,
+                mode: AddressingMode::AbsY,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xA1 => Some(OpCode {
+                instr: Instruction::LDA,
+                mode: AddressingMode::IndX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0xB1 => Some(OpCode {
+                instr: Instruction::LDA,
+                mode: AddressingMode::IndY,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            0xA2 => Some(OpCode {
+                instr: Instruction::LDX,
+                mode: AddressingMode::Imm,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0xA6 => Some(OpCode {
+                instr: Instruction::LDX,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0xB6 => Some(OpCode {
+                instr: Instruction::LDX,
+                mode: AddressingMode::ZpY,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xAE => Some(OpCode {
+                instr: Instruction::LDX,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xBE => Some(OpCode {
+                instr: Instruction::LDX,
+                mode: AddressingMode::AbsY,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xA0 => Some(OpCode {
+                instr: Instruction::LDY,
+                mode: AddressingMode::Imm,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0xA4 => Some(OpCode {
+                instr: Instruction::LDY,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0xB4 => Some(OpCode {
+                instr: Instruction::LDY,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xAC => Some(OpCode {
+                instr: Instruction::LDY,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xBC => Some(OpCode {
+                instr: Instruction::LDY,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            // --- END SECTION LOAD ---
             _ => None,
         }
     }
@@ -740,22 +860,50 @@ impl CPU {
         None
     }
 
+    fn get_register(&mut self, register: Register) -> &mut u8 {
+        match register {
+            Register::X => &mut self.x,
+            Register::Y => &mut self.y,
+            Register::A => &mut self.a,
+        }
+    }
+
+    fn generic_load<T: MemoryBus>(
+        &mut self,
+        memory: &T,
+        register: Register,
+        operand: Operand,
+    ) -> Option<u8> {
+        let value = match operand {
+            Operand::Immediate(val) => val,
+            Operand::Memory(addr, _) => memory.read_byte(addr),
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        };
+
+        let reg = self.get_register(register);
+        *reg = value;
+
+        self.p.update_negative_flag(value);
+        self.p.update_zero_flag(value);
+
+        matches!(operand, Operand::Memory(_, true)).then_some(1)
+    }
+
     fn generic_register_arithmetic(
         &mut self,
         register: Register,
         operation: ArithmeticOp,
     ) -> Option<u8> {
-        let reg = match register {
-            Register::X => &mut self.x,
-            Register::Y => &mut self.y,
-        };
-        *reg = match operation {
+        let reg = self.get_register(register);
+        let value = match operation {
             ArithmeticOp::Inc => (*reg).wrapping_add(1),
             ArithmeticOp::Dec => (*reg).wrapping_sub(1),
         };
 
-        self.p.update_negative_flag(*reg);
-        self.p.update_zero_flag(*reg);
+        *reg = value;
+
+        self.p.update_negative_flag(value);
+        self.p.update_zero_flag(value);
         None
     }
 
