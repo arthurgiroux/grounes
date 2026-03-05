@@ -49,6 +49,7 @@ pub enum Instruction {
     ASL,
     BCC,
     BCS,
+    BEQ,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,6 +139,7 @@ impl CPU {
             Instruction::ASL => self.instr_asl(memory, operand),
             Instruction::BCC => self.instr_bcc(operand),
             Instruction::BCS => self.instr_bcs(operand),
+            Instruction::BEQ => self.instr_beq(operand),
         };
 
         opcode.base_cycle + extra_cycles.unwrap_or_default()
@@ -293,6 +295,14 @@ impl CPU {
                 base_cycle: 2,
             }),
             // --- END SECTION BCS ---
+            // --- BEGIN SECTION BEQ ---
+            0xF0 => Some(OpCode {
+                instr: Instruction::BEQ,
+                mode: AddressingMode::Rel,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            // --- END SECTION BEQ ---
             _ => None,
         }
     }
@@ -476,14 +486,19 @@ impl CPU {
             None
         }
     }
-    /// instruction BCC: If the carry flag is clear, BCC branches to a nearby location by adding the relative offset to the program counter.
+    /// instruction BCC: If the carry flag is clear, jump to a nearby location by adding the relative offset to the program counter.
     fn instr_bcc(&mut self, operand: Operand) -> Option<u8> {
         self.generic_instr_branch(operand, !self.p.contains(StatusRegister::C))
     }
 
-    /// instruction BCS: If the carry flag is set, BCC branches to a nearby location by adding the relative offset to the program counter.
+    /// instruction BCS: If the carry flag is set, jump to a nearby location by adding the relative offset to the program counter.
     fn instr_bcs(&mut self, operand: Operand) -> Option<u8> {
         self.generic_instr_branch(operand, self.p.contains(StatusRegister::C))
+    }
+
+    /// instruction BEQ: If the last comparison result was equality, jump to a nearby location by adding the relative offset to the program counter.
+    fn instr_beq(&mut self, operand: Operand) -> Option<u8> {
+        self.generic_instr_branch(operand, !self.p.contains(StatusRegister::Z))
     }
 }
 
