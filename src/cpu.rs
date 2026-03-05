@@ -47,9 +47,15 @@ pub enum Instruction {
     ADC,
     AND,
     ASL,
+    // Branch operation
     BCC,
     BCS,
     BEQ,
+    BNE,
+    BPL,
+    BMI,
+    BVC,
+    BVS,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,9 +143,30 @@ impl CPU {
             Instruction::ADC => self.instr_adc(memory, operand),
             Instruction::AND => self.instr_and(memory, operand),
             Instruction::ASL => self.instr_asl(memory, operand),
-            Instruction::BCC => self.instr_bcc(operand),
-            Instruction::BCS => self.instr_bcs(operand),
-            Instruction::BEQ => self.instr_beq(operand),
+            Instruction::BCC => {
+                self.generic_instr_branch(operand, !self.p.contains(StatusRegister::C))
+            }
+            Instruction::BCS => {
+                self.generic_instr_branch(operand, self.p.contains(StatusRegister::C))
+            }
+            Instruction::BEQ => {
+                self.generic_instr_branch(operand, self.p.contains(StatusRegister::Z))
+            }
+            Instruction::BNE => {
+                self.generic_instr_branch(operand, !self.p.contains(StatusRegister::Z))
+            }
+            Instruction::BPL => {
+                self.generic_instr_branch(operand, !self.p.contains(StatusRegister::N))
+            }
+            Instruction::BMI => {
+                self.generic_instr_branch(operand, self.p.contains(StatusRegister::N))
+            }
+            Instruction::BVC => {
+                self.generic_instr_branch(operand, !self.p.contains(StatusRegister::V))
+            }
+            Instruction::BVS => {
+                self.generic_instr_branch(operand, self.p.contains(StatusRegister::V))
+            }
         };
 
         opcode.base_cycle + extra_cycles.unwrap_or_default()
@@ -279,30 +306,56 @@ impl CPU {
                 base_cycle: 7,
             }),
             // --- END SECTION ASL ---
-            // --- BEGIN SECTION BCC ---
+            // --- BEGIN BRANCH INSTRUCTIONS ---
             0x90 => Some(OpCode {
                 instr: Instruction::BCC,
                 mode: AddressingMode::Rel,
                 value: opcode,
                 base_cycle: 2,
             }),
-            // --- END SECTION BCC ---
-            // --- BEGIN SECTION BCS ---
             0xB0 => Some(OpCode {
                 instr: Instruction::BCS,
                 mode: AddressingMode::Rel,
                 value: opcode,
                 base_cycle: 2,
             }),
-            // --- END SECTION BCS ---
-            // --- BEGIN SECTION BEQ ---
             0xF0 => Some(OpCode {
                 instr: Instruction::BEQ,
                 mode: AddressingMode::Rel,
                 value: opcode,
                 base_cycle: 2,
             }),
-            // --- END SECTION BEQ ---
+            0xD0 => Some(OpCode {
+                instr: Instruction::BNE,
+                mode: AddressingMode::Rel,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x10 => Some(OpCode {
+                instr: Instruction::BPL,
+                mode: AddressingMode::Rel,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x30 => Some(OpCode {
+                instr: Instruction::BMI,
+                mode: AddressingMode::Rel,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x50 => Some(OpCode {
+                instr: Instruction::BVC,
+                mode: AddressingMode::Rel,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x70 => Some(OpCode {
+                instr: Instruction::BVS,
+                mode: AddressingMode::Rel,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            // --- END SECTION BRANCH ---
             _ => None,
         }
     }
@@ -485,20 +538,6 @@ impl CPU {
         } else {
             None
         }
-    }
-    /// instruction BCC: If the carry flag is clear, jump to a nearby location by adding the relative offset to the program counter.
-    fn instr_bcc(&mut self, operand: Operand) -> Option<u8> {
-        self.generic_instr_branch(operand, !self.p.contains(StatusRegister::C))
-    }
-
-    /// instruction BCS: If the carry flag is set, jump to a nearby location by adding the relative offset to the program counter.
-    fn instr_bcs(&mut self, operand: Operand) -> Option<u8> {
-        self.generic_instr_branch(operand, self.p.contains(StatusRegister::C))
-    }
-
-    /// instruction BEQ: If the last comparison result was equality, jump to a nearby location by adding the relative offset to the program counter.
-    fn instr_beq(&mut self, operand: Operand) -> Option<u8> {
-        self.generic_instr_branch(operand, !self.p.contains(StatusRegister::Z))
     }
 }
 
