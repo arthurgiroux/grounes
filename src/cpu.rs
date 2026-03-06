@@ -96,6 +96,7 @@ pub enum Instruction {
     AND,
     ORA,
     EOR,
+    BIT,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -211,6 +212,7 @@ impl CPU {
             Instruction::AND => self.instr_bitwise(memory, operand, BitwiseOp::And),
             Instruction::ORA => self.instr_bitwise(memory, operand, BitwiseOp::Or),
             Instruction::EOR => self.instr_bitwise(memory, operand, BitwiseOp::Xor),
+            Instruction::BIT => self.instr_bit(memory, operand),
             Instruction::ASL => self.instr_asl(memory, operand),
             Instruction::LSR => self.instr_lsr(memory, operand),
             Instruction::ROL => self.instr_rol(memory, operand),
@@ -940,6 +942,20 @@ impl CPU {
                 base_cycle: 5,
             }),
             // --- END SECTION EOR ---
+            // --- BEGIN SECTION BIT ---
+            0x24 => Some(OpCode {
+                instr: Instruction::BIT,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0x2C => Some(OpCode {
+                instr: Instruction::BIT,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            // --- END SECTION BIT ---
             _ => None,
         }
     }
@@ -1143,6 +1159,21 @@ impl CPU {
 
         // If we crossed a memory page, we need do add an extra cycle
         matches!(&operand, Operand::Memory(_, true)).then_some(1)
+    }
+
+    fn instr_bit<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) -> Option<u8> {
+        let value = match operand {
+            Operand::Memory(addr, _) => memory.read_byte(addr),
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        };
+
+        let bit_test = self.a & value;
+
+        self.p.update_zero_flag(bit_test);
+        self.p.set(StatusRegister::V, (value & 0b0010000) > 0);
+        self.p.set(StatusRegister::N, (value & 0b0100000) > 0);
+
+        None
     }
 
     /// ASL instruction: shifts all the bits of an operand one position to the left
