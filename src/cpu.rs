@@ -97,6 +97,10 @@ pub enum Instruction {
     ORA,
     EOR,
     BIT,
+    // Compare
+    CMP,
+    CPX,
+    CPY,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -251,6 +255,9 @@ impl CPU {
             Instruction::TAY => self.instr_transfer(Register::A, Register::Y),
             Instruction::TXA => self.instr_transfer(Register::X, Register::A),
             Instruction::TYA => self.instr_transfer(Register::Y, Register::A),
+            Instruction::CMP => self.instr_compare(memory, operand, Register::A),
+            Instruction::CPX => self.instr_compare(memory, operand, Register::X),
+            Instruction::CPY => self.instr_compare(memory, operand, Register::Y),
         };
 
         opcode.base_cycle + extra_cycles.unwrap_or_default()
@@ -956,6 +963,96 @@ impl CPU {
                 base_cycle: 4,
             }),
             // --- END SECTION BIT ---
+            // --- BEGIN SECTION CMP ---
+            0xC9 => Some(OpCode {
+                instr: Instruction::CMP,
+                mode: AddressingMode::Imm,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0xC5 => Some(OpCode {
+                instr: Instruction::CMP,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0xD5 => Some(OpCode {
+                instr: Instruction::CMP,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xCD => Some(OpCode {
+                instr: Instruction::CMP,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xDD => Some(OpCode {
+                instr: Instruction::CMP,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xD9 => Some(OpCode {
+                instr: Instruction::CMP,
+                mode: AddressingMode::AbsY,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xC1 => Some(OpCode {
+                instr: Instruction::CMP,
+                mode: AddressingMode::IndX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0xD1 => Some(OpCode {
+                instr: Instruction::CMP,
+                mode: AddressingMode::IndY,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            // --- END SECTION CMP ---
+            // --- BEGIN SECTION CPX ---
+            0xE0 => Some(OpCode {
+                instr: Instruction::CPX,
+                mode: AddressingMode::Imm,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0xE4 => Some(OpCode {
+                instr: Instruction::CPX,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0xEC => Some(OpCode {
+                instr: Instruction::CPX,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            // --- END SECTION CPX ---
+            // --- BEGIN SECTION CPY ---
+            0xC0 => Some(OpCode {
+                instr: Instruction::CPY,
+                mode: AddressingMode::Imm,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0xC4 => Some(OpCode {
+                instr: Instruction::CPY,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0xCC => Some(OpCode {
+                instr: Instruction::CPY,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            // --- END SECTION CPY ---
             _ => None,
         }
     }
@@ -1158,7 +1255,7 @@ impl CPU {
         self.p.update_negative_flag(self.a);
 
         // If we crossed a memory page, we need do add an extra cycle
-        matches!(&operand, Operand::Memory(_, true)).then_some(1)
+        matches!(operand, Operand::Memory(_, true)).then_some(1)
     }
 
     fn instr_bit<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) -> Option<u8> {
@@ -1170,10 +1267,31 @@ impl CPU {
         let bit_test = self.a & value;
 
         self.p.update_zero_flag(bit_test);
-        self.p.set(StatusRegister::V, (value & 0b0010000) > 0);
-        self.p.set(StatusRegister::N, (value & 0b0100000) > 0);
+        self.p.set(StatusRegister::V, (value & 0b0100000) > 0);
+        self.p.set(StatusRegister::N, (value & 0b1000000) > 0);
 
         None
+    }
+
+    fn instr_compare<T: MemoryBus>(
+        &mut self,
+        memory: &T,
+        operand: Operand,
+        register: Register,
+    ) -> Option<u8> {
+        let value = match operand {
+            Operand::Accumulator => self.a,
+            Operand::Immediate(val) => val,
+            Operand::Memory(addr, _) => memory.read_byte(addr),
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        };
+
+        let reg = self.get_register(register);
+        self.p.set(StatusRegister::C, reg >= value);
+        self.p.set(StatusRegister::Z, reg == value);
+        self.p.set(StatusRegister::N, (reg - value) & 0x80 > 0);
+
+        matches!(operand, Operand::Memory(_, true)).then_some(1)
     }
 
     /// ASL instruction: shifts all the bits of an operand one position to the left
