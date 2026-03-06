@@ -101,6 +101,8 @@ pub enum Instruction {
     CMP,
     CPX,
     CPY,
+    // Jump
+    JMP,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -258,6 +260,7 @@ impl CPU {
             Instruction::CMP => self.instr_compare(memory, operand, Register::A),
             Instruction::CPX => self.instr_compare(memory, operand, Register::X),
             Instruction::CPY => self.instr_compare(memory, operand, Register::Y),
+            Instruction::JMP => self.instr_jump(operand),
         };
 
         opcode.base_cycle + extra_cycles.unwrap_or_default()
@@ -1053,6 +1056,20 @@ impl CPU {
                 base_cycle: 4,
             }),
             // --- END SECTION CPY ---
+            // --- BEGIN SECTION JMP ---
+            0x4C => Some(OpCode {
+                instr: Instruction::JMP,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0x6C => Some(OpCode {
+                instr: Instruction::JMP,
+                mode: AddressingMode::Ind,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            // --- END SECTION JMP ---
             _ => None,
         }
     }
@@ -1486,6 +1503,15 @@ impl CPU {
         } else {
             None
         }
+    }
+
+    fn instr_jump(&mut self, operand: Operand) -> Option<u8> {
+        self.pc = match operand {
+            Operand::Memory(addr, _) => addr,
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        };
+
+        None
     }
 }
 
