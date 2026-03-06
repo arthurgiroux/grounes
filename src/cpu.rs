@@ -84,6 +84,11 @@ pub enum Instruction {
     STA,
     STX,
     STY,
+    // Transfer
+    TAX,
+    TAY,
+    TXA,
+    TYA,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -221,6 +226,10 @@ impl CPU {
             Instruction::STA => self.instr_store(memory, Register::A, operand),
             Instruction::STX => self.instr_store(memory, Register::X, operand),
             Instruction::STY => self.instr_store(memory, Register::Y, operand),
+            Instruction::TAX => self.instr_transfer(Register::A, Register::X),
+            Instruction::TAY => self.instr_transfer(Register::A, Register::Y),
+            Instruction::TXA => self.instr_transfer(Register::X, Register::A),
+            Instruction::TYA => self.instr_transfer(Register::Y, Register::A),
         };
 
         opcode.base_cycle + extra_cycles.unwrap_or_default()
@@ -689,6 +698,32 @@ impl CPU {
                 value: opcode,
                 base_cycle: 6,
             }),
+            // --- END SECTION STORE ---
+            // --- BEGIN SECTION TRANSFER ---
+            0xAA => Some(OpCode {
+                instr: Instruction::TAX,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0xA8 => Some(OpCode {
+                instr: Instruction::TAY,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x8A => Some(OpCode {
+                instr: Instruction::TXA,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x98 => Some(OpCode {
+                instr: Instruction::TYA,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
             _ => None,
         }
     }
@@ -961,6 +996,15 @@ impl CPU {
         self.p.update_zero_flag(value);
 
         matches!(operand, Operand::Memory(_, true)).then_some(1)
+    }
+
+    fn instr_transfer(&mut self, source: Register, target: Register) -> Option<u8> {
+        let source = self.get_register(source);
+        let target_reg = self.get_register_mut(target);
+        *target_reg = source;
+        self.p.update_negative_flag(source);
+        self.p.update_zero_flag(source);
+        None
     }
 
     fn generic_register_arithmetic(
