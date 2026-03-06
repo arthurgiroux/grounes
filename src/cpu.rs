@@ -56,7 +56,6 @@ pub struct CPU {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Instruction {
-    AND,
     // Branch operation
     BCC,
     BCS,
@@ -93,6 +92,10 @@ pub enum Instruction {
     LSR,
     ROL,
     ROR,
+    // Bitwise
+    AND,
+    ORA,
+    EOR,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,6 +134,13 @@ pub enum Register {
 pub enum ArithmeticOp {
     Inc,
     Dec,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BitwiseOp {
+    And,
+    Or,
+    Xor,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -198,7 +208,9 @@ impl CPU {
             Instruction::DEX => self.generic_register_arithmetic(Register::X, ArithmeticOp::Dec),
             Instruction::INY => self.generic_register_arithmetic(Register::Y, ArithmeticOp::Inc),
             Instruction::DEY => self.generic_register_arithmetic(Register::Y, ArithmeticOp::Dec),
-            Instruction::AND => self.instr_and(memory, operand),
+            Instruction::AND => self.instr_bitwise(memory, operand, BitwiseOp::And),
+            Instruction::ORA => self.instr_bitwise(memory, operand, BitwiseOp::Or),
+            Instruction::EOR => self.instr_bitwise(memory, operand, BitwiseOp::Xor),
             Instruction::ASL => self.instr_asl(memory, operand),
             Instruction::LSR => self.instr_lsr(memory, operand),
             Instruction::ROL => self.instr_rol(memory, operand),
@@ -420,56 +432,6 @@ impl CPU {
                 base_cycle: 2,
             }),
             // --- END SECTION DEC ---
-            // --- BEGIN SECTION AND ---
-            0x29 => Some(OpCode {
-                instr: Instruction::AND,
-                mode: AddressingMode::Imm,
-                value: opcode,
-                base_cycle: 2,
-            }),
-            0x25 => Some(OpCode {
-                instr: Instruction::AND,
-                mode: AddressingMode::Zp,
-                value: opcode,
-                base_cycle: 3,
-            }),
-            0x35 => Some(OpCode {
-                instr: Instruction::AND,
-                mode: AddressingMode::ZpX,
-                value: opcode,
-                base_cycle: 4,
-            }),
-            0x2D => Some(OpCode {
-                instr: Instruction::AND,
-                mode: AddressingMode::Abs,
-                value: opcode,
-                base_cycle: 4,
-            }),
-            0x3D => Some(OpCode {
-                instr: Instruction::AND,
-                mode: AddressingMode::AbsX,
-                value: opcode,
-                base_cycle: 4,
-            }),
-            0x39 => Some(OpCode {
-                instr: Instruction::AND,
-                mode: AddressingMode::AbsY,
-                value: opcode,
-                base_cycle: 4,
-            }),
-            0x21 => Some(OpCode {
-                instr: Instruction::AND,
-                mode: AddressingMode::IndX,
-                value: opcode,
-                base_cycle: 6,
-            }),
-            0x31 => Some(OpCode {
-                instr: Instruction::AND,
-                mode: AddressingMode::IndY,
-                value: opcode,
-                base_cycle: 5,
-            }),
-            // --- END SECTION AND ---
             // --- BEGIN SECTION ASL ---
             0x0A => Some(OpCode {
                 instr: Instruction::ASL,
@@ -828,6 +790,156 @@ impl CPU {
                 base_cycle: 7,
             }),
             // --- END SECTION ROR ---
+            // --- BEGIN SECTION AND ---
+            0x29 => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::Imm,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x25 => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0x35 => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x2D => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x3D => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x39 => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::AbsY,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x21 => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::IndX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x31 => Some(OpCode {
+                instr: Instruction::AND,
+                mode: AddressingMode::IndY,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            // --- END SECTION AND ---
+            // --- BEGIN SECTION ORA ---
+            0x09 => Some(OpCode {
+                instr: Instruction::ORA,
+                mode: AddressingMode::Imm,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x05 => Some(OpCode {
+                instr: Instruction::ORA,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0x15 => Some(OpCode {
+                instr: Instruction::ORA,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x0D => Some(OpCode {
+                instr: Instruction::ORA,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x1D => Some(OpCode {
+                instr: Instruction::ORA,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x19 => Some(OpCode {
+                instr: Instruction::ORA,
+                mode: AddressingMode::AbsY,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x01 => Some(OpCode {
+                instr: Instruction::ORA,
+                mode: AddressingMode::IndX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x11 => Some(OpCode {
+                instr: Instruction::ORA,
+                mode: AddressingMode::IndY,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            // --- END SECTION ORA ---
+            // --- BEGIN SECTION EOR ---
+            0x49 => Some(OpCode {
+                instr: Instruction::EOR,
+                mode: AddressingMode::Imm,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x45 => Some(OpCode {
+                instr: Instruction::EOR,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0x55 => Some(OpCode {
+                instr: Instruction::EOR,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x4D => Some(OpCode {
+                instr: Instruction::EOR,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x5D => Some(OpCode {
+                instr: Instruction::EOR,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x59 => Some(OpCode {
+                instr: Instruction::EOR,
+                mode: AddressingMode::AbsY,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x41 => Some(OpCode {
+                instr: Instruction::EOR,
+                mode: AddressingMode::IndX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x51 => Some(OpCode {
+                instr: Instruction::EOR,
+                mode: AddressingMode::IndY,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            // --- END SECTION EOR ---
             _ => None,
         }
     }
@@ -1007,8 +1119,12 @@ impl CPU {
         None
     }
 
-    /// AND instruction: bitwise and operation between the accumulator and the operand
-    fn instr_and<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) -> Option<u8> {
+    fn instr_bitwise<T: MemoryBus>(
+        &mut self,
+        memory: &mut T,
+        operand: Operand,
+        operation: BitwiseOp,
+    ) -> Option<u8> {
         let value = match operand {
             Operand::Accumulator => self.a,
             Operand::Immediate(val) => val,
@@ -1016,7 +1132,12 @@ impl CPU {
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
-        self.a &= value;
+        self.a = match operation {
+            BitwiseOp::And => self.a & value,
+            BitwiseOp::Or => self.a | value,
+            BitwiseOp::Xor => self.a ^ value,
+        };
+
         self.p.update_zero_flag(self.a);
         self.p.update_negative_flag(self.a);
 
