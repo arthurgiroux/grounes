@@ -103,6 +103,7 @@ pub enum Instruction {
     CPY,
     // Jump
     JMP,
+    JSR,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -196,6 +197,22 @@ impl CPU {
         }
     }
 
+    fn sp_push<T: MemoryBus>(&mut self, memory: &mut T, value: u8) {
+        memory.write_byte(0x0100 & self.sp as u16, value);
+        self.sp += 1;
+    }
+
+    fn sp_push_word<T: MemoryBus>(&mut self, memory: &mut T, value: u16) {
+        memory.write_word(0x0100 & self.sp as u16, value);
+        self.sp += 2;
+    }
+
+    fn sp_pop<T: MemoryBus>(&mut self, memory: &mut T) -> u8 {
+        let value = memory.read_byte(0x0100 & self.sp as u16);
+        self.sp -= 1;
+        value
+    }
+
     /// Step the CPU: fetch the next instruction and execute it
     /// returns the number of cycles it took
     pub fn step<T: MemoryBus>(&mut self, memory: &mut T) -> u8 {
@@ -261,6 +278,7 @@ impl CPU {
             Instruction::CPX => self.instr_compare(memory, operand, Register::X),
             Instruction::CPY => self.instr_compare(memory, operand, Register::Y),
             Instruction::JMP => self.instr_jump(operand),
+            Instruction::JSR => self.instr_jump_to_subroutine(memory, operand),
         };
 
         opcode.base_cycle + extra_cycles.unwrap_or_default()
@@ -1070,6 +1088,14 @@ impl CPU {
                 base_cycle: 5,
             }),
             // --- END SECTION JMP ---
+            // --- BEGIN SECTION JSR ---
+            0x20 => Some(OpCode {
+                instr: Instruction::JSR,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            // --- END SECTION JSR ---
             _ => None,
         }
     }
@@ -1511,6 +1537,20 @@ impl CPU {
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
+        None
+    }
+
+    fn instr_jump_to_subroutine<T: MemoryBus>(
+        &mut self,
+        memory: &mut T,
+        operand: Operand,
+    ) -> Option<u8> {
+        self.sp_push_word(memory, self.pc + 2);
+
+        self.pc = match operand {
+            Operand::Memory(addr, _) => addr,
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        };
         None
     }
 }
