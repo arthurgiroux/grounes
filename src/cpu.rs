@@ -91,6 +91,8 @@ pub enum Instruction {
     // Shift
     ASL,
     LSR,
+    ROL,
+    ROR,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -199,6 +201,8 @@ impl CPU {
             Instruction::AND => self.instr_and(memory, operand),
             Instruction::ASL => self.instr_asl(memory, operand),
             Instruction::LSR => self.instr_lsr(memory, operand),
+            Instruction::ROL => self.instr_rol(memory, operand),
+            Instruction::ROR => self.instr_ror(memory, operand),
             Instruction::BCC => {
                 self.generic_instr_branch(operand, !self.p.contains(StatusRegister::C))
             }
@@ -760,6 +764,70 @@ impl CPU {
                 base_cycle: 7,
             }),
             // --- END SECTION LSR ---
+            // --- BEGIN SECTION ROL ---
+            0x2A => Some(OpCode {
+                instr: Instruction::ROL,
+                mode: AddressingMode::Acc,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x26 => Some(OpCode {
+                instr: Instruction::ROL,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            0x36 => Some(OpCode {
+                instr: Instruction::ROL,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x2E => Some(OpCode {
+                instr: Instruction::ROL,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x3E => Some(OpCode {
+                instr: Instruction::ROL,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 7,
+            }),
+            // --- END SECTION ROL ---
+            // --- BEGIN SECTION ROR ---
+            0x6A => Some(OpCode {
+                instr: Instruction::ROR,
+                mode: AddressingMode::Acc,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x66 => Some(OpCode {
+                instr: Instruction::ROR,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            0x76 => Some(OpCode {
+                instr: Instruction::ROR,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x6E => Some(OpCode {
+                instr: Instruction::ROR,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x7E => Some(OpCode {
+                instr: Instruction::ROR,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 7,
+            }),
+            // --- END SECTION ROR ---
             _ => None,
         }
     }
@@ -994,6 +1062,54 @@ impl CPU {
         self.p.set(StatusRegister::C, value & 0x01 > 0);
         self.p.update_zero_flag(shifted_value);
         self.p.set(StatusRegister::N, false);
+
+        match operand {
+            Operand::Accumulator => {
+                self.a = shifted_value;
+            }
+            Operand::Memory(addr, _) => memory.write_byte(addr, shifted_value),
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        };
+
+        None
+    }
+
+    /// ROL instruction: Shifts a memory value of the accumulator to the left through the carry.
+    fn instr_rol<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) -> Option<u8> {
+        let value = match operand {
+            Operand::Accumulator => self.a,
+            Operand::Memory(addr, _) => memory.read_byte(addr),
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        };
+
+        let shifted_value = ((self.p.contains(StatusRegister::C) as u8) & 0x01) & value << 1;
+        self.p.set(StatusRegister::C, value & 0x80 > 0);
+        self.p.update_zero_flag(shifted_value);
+        self.p.update_negative_flag(shifted_value);
+
+        match operand {
+            Operand::Accumulator => {
+                self.a = shifted_value;
+            }
+            Operand::Memory(addr, _) => memory.write_byte(addr, shifted_value),
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        };
+
+        None
+    }
+
+    /// ROR instruction: Shifts a memory value of the accumulator to the right through the carry.
+    fn instr_ror<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) -> Option<u8> {
+        let value = match operand {
+            Operand::Accumulator => self.a,
+            Operand::Memory(addr, _) => memory.read_byte(addr),
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        };
+
+        let shifted_value = ((self.p.contains(StatusRegister::C) as u8) << 7) & (value >> 1);
+        self.p.set(StatusRegister::C, value & 0x01 > 0);
+        self.p.update_zero_flag(shifted_value);
+        self.p.update_negative_flag(shifted_value);
 
         match operand {
             Operand::Accumulator => {
