@@ -80,6 +80,10 @@ pub enum Instruction {
     LDA,
     LDX,
     LDY,
+    // Store
+    STA,
+    STX,
+    STY,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -211,9 +215,12 @@ impl CPU {
             Instruction::BVS => {
                 self.generic_instr_branch(operand, self.p.contains(StatusRegister::V))
             }
-            Instruction::LDA => self.generic_load(memory, Register::A, operand),
-            Instruction::LDX => self.generic_load(memory, Register::X, operand),
-            Instruction::LDY => self.generic_load(memory, Register::Y, operand),
+            Instruction::LDA => self.instr_load(memory, Register::A, operand),
+            Instruction::LDX => self.instr_load(memory, Register::X, operand),
+            Instruction::LDY => self.instr_load(memory, Register::Y, operand),
+            Instruction::STA => self.instr_store(memory, Register::A, operand),
+            Instruction::STX => self.instr_store(memory, Register::X, operand),
+            Instruction::STY => self.instr_store(memory, Register::Y, operand),
         };
 
         opcode.base_cycle + extra_cycles.unwrap_or_default()
@@ -639,6 +646,49 @@ impl CPU {
                 base_cycle: 4,
             }),
             // --- END SECTION LOAD ---
+            // --- BEGIN SECTION STORE ---
+            0x85 => Some(OpCode {
+                instr: Instruction::STA,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0x95 => Some(OpCode {
+                instr: Instruction::STA,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x8D => Some(OpCode {
+                instr: Instruction::STA,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x9D => Some(OpCode {
+                instr: Instruction::STA,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            0x99 => Some(OpCode {
+                instr: Instruction::STA,
+                mode: AddressingMode::AbsY,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            0x81 => Some(OpCode {
+                instr: Instruction::STA,
+                mode: AddressingMode::IndX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x91 => Some(OpCode {
+                instr: Instruction::STA,
+                mode: AddressingMode::IndY,
+                value: opcode,
+                base_cycle: 6,
+            }),
             _ => None,
         }
     }
@@ -860,7 +910,7 @@ impl CPU {
         None
     }
 
-    fn get_register(&mut self, register: Register) -> &mut u8 {
+    fn get_register_mut(&mut self, register: Register) -> &mut u8 {
         match register {
             Register::X => &mut self.x,
             Register::Y => &mut self.y,
@@ -868,7 +918,31 @@ impl CPU {
         }
     }
 
-    fn generic_load<T: MemoryBus>(
+    fn get_register(&self, register: Register) -> u8 {
+        match register {
+            Register::X => self.x,
+            Register::Y => self.y,
+            Register::A => self.a,
+        }
+    }
+
+    fn instr_store<T: MemoryBus>(
+        &mut self,
+        memory: &mut T,
+        register: Register,
+        operand: Operand,
+    ) -> Option<u8> {
+        match operand {
+            Operand::Memory(addr, _) => {
+                let value = self.get_register(register);
+                memory.write_byte(addr, value);
+            }
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        }
+        None
+    }
+
+    fn instr_load<T: MemoryBus>(
         &mut self,
         memory: &T,
         register: Register,
@@ -880,7 +954,7 @@ impl CPU {
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
-        let reg = self.get_register(register);
+        let reg = self.get_register_mut(register);
         *reg = value;
 
         self.p.update_negative_flag(value);
@@ -894,7 +968,7 @@ impl CPU {
         register: Register,
         operation: ArithmeticOp,
     ) -> Option<u8> {
-        let reg = self.get_register(register);
+        let reg = self.get_register_mut(register);
         let value = match operation {
             ArithmeticOp::Inc => (*reg).wrapping_add(1),
             ArithmeticOp::Dec => (*reg).wrapping_sub(1),
