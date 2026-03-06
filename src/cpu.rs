@@ -57,7 +57,6 @@ pub struct CPU {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Instruction {
     AND,
-    ASL,
     // Branch operation
     BCC,
     BCS,
@@ -89,6 +88,9 @@ pub enum Instruction {
     TAY,
     TXA,
     TYA,
+    // Shift
+    ASL,
+    LSR,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -196,6 +198,7 @@ impl CPU {
             Instruction::DEY => self.generic_register_arithmetic(Register::Y, ArithmeticOp::Dec),
             Instruction::AND => self.instr_and(memory, operand),
             Instruction::ASL => self.instr_asl(memory, operand),
+            Instruction::LSR => self.instr_lsr(memory, operand),
             Instruction::BCC => {
                 self.generic_instr_branch(operand, !self.p.contains(StatusRegister::C))
             }
@@ -724,6 +727,39 @@ impl CPU {
                 value: opcode,
                 base_cycle: 2,
             }),
+            // --- END SECTION TRANSFER ---
+            // --- BEGIN SECTION LSR ---
+            0x4A => Some(OpCode {
+                instr: Instruction::LSR,
+                mode: AddressingMode::Acc,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x46 => Some(OpCode {
+                instr: Instruction::LSR,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            0x56 => Some(OpCode {
+                instr: Instruction::LSR,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x4E => Some(OpCode {
+                instr: Instruction::LSR,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x5E => Some(OpCode {
+                instr: Instruction::LSR,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 7,
+            }),
+            // --- END SECTION LSR ---
             _ => None,
         }
     }
@@ -933,6 +969,31 @@ impl CPU {
         self.p.set(StatusRegister::C, value & 0x80 != 0);
         self.p.update_zero_flag(shifted_value);
         self.p.update_negative_flag(shifted_value);
+
+        match operand {
+            Operand::Accumulator => {
+                self.a = shifted_value;
+            }
+            Operand::Memory(addr, _) => memory.write_byte(addr, shifted_value),
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        };
+
+        None
+    }
+
+    /// LSR instruction: shifts all the bits of a memory value or the accumulator one position to the right
+    /// lowest bit will be put in the carry
+    fn instr_lsr<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) -> Option<u8> {
+        let value = match operand {
+            Operand::Accumulator => self.a,
+            Operand::Memory(addr, _) => memory.read_byte(addr),
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        };
+
+        let shifted_value = value >> 1;
+        self.p.set(StatusRegister::C, value & 0x01 > 0);
+        self.p.update_zero_flag(shifted_value);
+        self.p.set(StatusRegister::N, false);
 
         match operand {
             Operand::Accumulator => {
