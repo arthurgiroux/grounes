@@ -106,6 +106,7 @@ pub enum Instruction {
     JSR,
     RTS,
     BRK,
+    RTI,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -304,6 +305,7 @@ impl CPU {
             Instruction::JSR => self.instr_jump_to_subroutine(memory, operand),
             Instruction::RTS => self.instr_return_from_subroutine(memory),
             Instruction::BRK => self.instr_break(memory),
+            Instruction::RTI => self.instr_return_from_interrupt(memory),
         };
 
         opcode.base_cycle + extra_cycles.unwrap_or_default()
@@ -1137,6 +1139,14 @@ impl CPU {
                 base_cycle: 7,
             }),
             // --- END SECTION BRK ---
+            // --- BEGIN SECTION RTI ---
+            0x40 => Some(OpCode {
+                instr: Instruction::RTI,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            // --- END SECTION RTI ---
             _ => None,
         }
     }
@@ -1613,6 +1623,18 @@ impl CPU {
 
         self.pc = memory.read_word(0xFFFE);
         self.p.set(StatusRegister::I, true);
+
+        None
+    }
+
+    fn instr_return_from_interrupt<T: MemoryBus>(&mut self, memory: &mut T) -> Option<u8> {
+        let flags = self.sp.pop_byte(memory);
+        let pc_low = self.sp.pop_byte(memory);
+        let pc_high = self.sp.pop_byte(memory);
+        self.pc = word_from_bytes(pc_low, pc_high);
+
+        self.p = StatusRegister::from_bits_truncate(flags);
+        self.p.remove(StatusRegister::Unused | StatusRegister::B);
 
         None
     }
