@@ -48,7 +48,7 @@ pub struct CPU {
     pc: u16,
 
     // stack pointer
-    sp: u8,
+    sp: StackPointer,
 
     // status register
     p: StatusRegister,
@@ -180,6 +180,43 @@ fn is_page_crossed(base_addr: u16, incremented_addr: u16) -> bool {
     (base_addr & 0xFF00) != (incremented_addr & 0xFF00)
 }
 
+#[derive(Debug)]
+struct StackPointer {
+    value: u8,
+}
+
+/// An "Empty Descending" stack pointer.
+/// The stack pointer points to the last valid data item pushed onto the stack.
+impl StackPointer {
+    fn push_byte<T: MemoryBus>(&mut self, memory: &mut T, value: u8) {
+        memory.write_byte(0x0100 | self.value as u16, value);
+        self.value -= 1;
+    }
+
+    fn push_word<T: MemoryBus>(&mut self, memory: &mut T, value: u16) {
+        memory.write_word(0x0100 | self.value as u16, value);
+        self.value -= 2;
+    }
+
+    fn pop_byte<T: MemoryBus>(&mut self, memory: &T) -> u8 {
+        self.value += 1;
+        let value = memory.read_byte(0x0100 | self.value as u16);
+        value
+    }
+
+    fn pop_word<T: MemoryBus>(&mut self, memory: &T) -> u16 {
+        self.value += 2;
+        let value = memory.read_word(0x0100 | self.value as u16);
+        value
+    }
+}
+
+impl Default for StackPointer {
+    fn default() -> Self {
+        StackPointer { value: 0xFF }
+    }
+}
+
 impl Default for CPU {
     fn default() -> Self {
         Self::new()
@@ -193,31 +230,9 @@ impl CPU {
             x: 0,
             y: 0,
             pc: 0,
-            sp: 0,
+            sp: StackPointer::default(),
             p: StatusRegister::empty(),
         }
-    }
-
-    fn sp_push<T: MemoryBus>(&mut self, memory: &mut T, value: u8) {
-        memory.write_byte(0x0100 & self.sp as u16, value);
-        self.sp += 1;
-    }
-
-    fn sp_push_word<T: MemoryBus>(&mut self, memory: &mut T, value: u16) {
-        memory.write_word(0x0100 & self.sp as u16, value);
-        self.sp += 2;
-    }
-
-    fn sp_pop<T: MemoryBus>(&mut self, memory: &mut T) -> u8 {
-        let value = memory.read_byte(0x0100 & self.sp as u16);
-        self.sp -= 1;
-        value
-    }
-
-    fn sp_pop_word<T: MemoryBus>(&mut self, memory: &mut T) -> u16 {
-        let value = memory.read_word(0x0100 & self.sp as u16);
-        self.sp -= 2;
-        value
     }
 
     /// Step the CPU: fetch the next instruction and execute it
@@ -1561,7 +1576,7 @@ impl CPU {
         memory: &mut T,
         operand: Operand,
     ) -> Option<u8> {
-        self.sp_push_word(memory, self.pc + 2);
+        self.sp.push_word(memory, self.pc + 2);
 
         self.pc = match operand {
             Operand::Memory(addr, _) => addr,
@@ -1571,7 +1586,7 @@ impl CPU {
     }
 
     fn instr_return_from_subroutine<T: MemoryBus>(&mut self, memory: &mut T) -> Option<u8> {
-        self.pc = self.sp_pop_word(memory) + 1;
+        self.pc = self.sp.pop_word(memory) + 1;
         None
     }
 }
@@ -1852,5 +1867,29 @@ mod tests {
         let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::Ind);
         assert_eq!(addr, expected_addr);
         assert_eq!(page_crossed, false);
+    }
+
+    #[test]
+    fn stack_pointer_should_push_and_pop_byte() {
+        let mut memory = MockMemory::new();
+        let mut sp = StackPointer::default();
+        let first_value = 0xAB;
+        let second_value = 0xCD;
+        sp.push_byte(&mut memory, first_value);
+        sp.push_byte(&mut memory, second_value);
+        assert_eq!(sp.pop_byte(&memory), second_value);
+        assert_eq!(sp.pop_byte(&memory), first_value);
+    }
+
+    #[test]
+    fn stack_pointer_should_push_and_pop_words() {
+        let mut memory = MockMemory::new();
+        let mut sp = StackPointer::default();
+        let first_value = 0x1234;
+        let second_value = 0xABCD;
+        sp.push_word(&mut memory, first_value);
+        sp.push_word(&mut memory, second_value);
+        assert_eq!(sp.pop_word(&memory), second_value);
+        assert_eq!(sp.pop_word(&memory), first_value);
     }
 }
