@@ -105,6 +105,7 @@ pub enum Instruction {
     JMP,
     JSR,
     RTS,
+    BRK,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -302,6 +303,7 @@ impl CPU {
             Instruction::JMP => self.instr_jump(operand),
             Instruction::JSR => self.instr_jump_to_subroutine(memory, operand),
             Instruction::RTS => self.instr_return_from_subroutine(memory),
+            Instruction::BRK => self.instr_break(memory),
         };
 
         opcode.base_cycle + extra_cycles.unwrap_or_default()
@@ -1127,6 +1129,14 @@ impl CPU {
                 base_cycle: 6,
             }),
             // --- END SECTION JSR ---
+            // --- BEGIN SECTION BRK ---
+            0x00 => Some(OpCode {
+                instr: Instruction::BRK,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 7,
+            }),
+            // --- END SECTION BRK ---
             _ => None,
         }
     }
@@ -1587,6 +1597,23 @@ impl CPU {
 
     fn instr_return_from_subroutine<T: MemoryBus>(&mut self, memory: &mut T) -> Option<u8> {
         self.pc = self.sp.pop_word(memory) + 1;
+        None
+    }
+
+    fn instr_break<T: MemoryBus>(&mut self, memory: &mut T) -> Option<u8> {
+        let pc_value = self.pc + 2;
+        // When we get an IRQ we push the current PC and processor flags to the stack.
+        self.sp.push_byte(memory, (pc_value >> 8) as u8);
+        self.sp.push_byte(memory, (pc_value & 0xFF) as u8);
+
+        // The break flag must be set on the flags that are pushed to the stack, not the flags in the CPU
+        let mut current_flag = self.p.clone();
+        current_flag.set(StatusRegister::B, true);
+        self.sp.push_byte(memory, current_flag.bits());
+
+        self.pc = memory.read_word(0xFFFE);
+        self.p.set(StatusRegister::I, true);
+
         None
     }
 }
