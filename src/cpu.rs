@@ -107,6 +107,11 @@ pub enum Instruction {
     RTS,
     BRK,
     RTI,
+    // Stack
+    PHA,
+    PLA,
+    PHP,
+    PLP,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -306,6 +311,10 @@ impl CPU {
             Instruction::RTS => self.instr_return_from_subroutine(memory),
             Instruction::BRK => self.instr_break(memory),
             Instruction::RTI => self.instr_return_from_interrupt(memory),
+            Instruction::PHA => self.instr_push_register_to_sp(memory, Register::A),
+            Instruction::PLA => self.instr_pull_register_from_sp(memory, Register::A),
+            Instruction::PHP => self.instr_push_flags_to_sp(memory),
+            Instruction::PLP => self.instr_pull_flags_from_sp(memory),
         };
 
         opcode.base_cycle + extra_cycles.unwrap_or_default()
@@ -1147,6 +1156,32 @@ impl CPU {
                 base_cycle: 6,
             }),
             // --- END SECTION RTI ---
+            // --- BEGIN SECTION PH/PL ---
+            0x48 => Some(OpCode {
+                instr: Instruction::PHA,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0x08 => Some(OpCode {
+                instr: Instruction::PHP,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0x68 => Some(OpCode {
+                instr: Instruction::PLA,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x28 => Some(OpCode {
+                instr: Instruction::PLP,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            // --- END SECTION PH/PL ---
             _ => None,
         }
     }
@@ -1634,6 +1669,47 @@ impl CPU {
         self.pc = word_from_bytes(pc_low, pc_high);
 
         self.p = StatusRegister::from_bits_truncate(flags);
+        self.p.remove(StatusRegister::Unused | StatusRegister::B);
+
+        None
+    }
+
+    fn instr_push_register_to_sp<T: MemoryBus>(
+        &mut self,
+        memory: &mut T,
+        register: Register,
+    ) -> Option<u8> {
+        self.sp.push_byte(memory, self.get_register(register));
+
+        None
+    }
+
+    fn instr_pull_register_from_sp<T: MemoryBus>(
+        &mut self,
+        memory: &T,
+        register: Register,
+    ) -> Option<u8> {
+        let value = self.sp.pop_byte(memory);
+        let reg = self.get_register_mut(register);
+        *reg = value;
+
+        self.p.update_negative_flag(value);
+        self.p.update_zero_flag(value);
+
+        None
+    }
+
+    fn instr_push_flags_to_sp<T: MemoryBus>(&mut self, memory: &mut T) -> Option<u8> {
+        let flags = self.p.union(StatusRegister::B | StatusRegister::Unused);
+        self.sp.push_byte(memory, flags.bits());
+
+        None
+    }
+
+    fn instr_pull_flags_from_sp<T: MemoryBus>(&mut self, memory: &T) -> Option<u8> {
+        let value = self.sp.pop_byte(memory);
+
+        self.p = StatusRegister::from_bits_truncate(value);
         self.p.remove(StatusRegister::Unused | StatusRegister::B);
 
         None
