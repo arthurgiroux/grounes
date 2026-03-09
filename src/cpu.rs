@@ -112,6 +112,8 @@ pub enum Instruction {
     PLA,
     PHP,
     PLP,
+    TXS,
+    TSX,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,6 +146,7 @@ pub enum Register {
     X,
     Y,
     A,
+    SP,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -315,6 +318,8 @@ impl CPU {
             Instruction::PLA => self.instr_pull_register_from_sp(memory, Register::A),
             Instruction::PHP => self.instr_push_flags_to_sp(memory),
             Instruction::PLP => self.instr_pull_flags_from_sp(memory),
+            Instruction::TSX => self.instr_transfer(Register::SP, Register::X),
+            Instruction::TXS => self.instr_transfer(Register::X, Register::SP),
         };
 
         opcode.base_cycle + extra_cycles.unwrap_or_default()
@@ -1182,6 +1187,20 @@ impl CPU {
                 base_cycle: 4,
             }),
             // --- END SECTION PH/PL ---
+            // --- END SECTION TXS/TSX ---
+            0xBA => Some(OpCode {
+                instr: Instruction::TSX,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x9A => Some(OpCode {
+                instr: Instruction::TXS,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            // --- END SECTION TXS/TSX ---
             _ => None,
         }
     }
@@ -1526,6 +1545,7 @@ impl CPU {
             Register::X => &mut self.x,
             Register::Y => &mut self.y,
             Register::A => &mut self.a,
+            Register::SP => &mut self.sp.value,
         }
     }
 
@@ -1534,6 +1554,7 @@ impl CPU {
             Register::X => self.x,
             Register::Y => self.y,
             Register::A => self.a,
+            Register::SP => self.sp.value,
         }
     }
 
@@ -1578,8 +1599,11 @@ impl CPU {
         let source = self.get_register(source);
         let target_reg = self.get_register_mut(target);
         *target_reg = source;
-        self.p.update_negative_flag(source);
-        self.p.update_zero_flag(source);
+        // We only update the flags for some register
+        if matches!(target, Register::A | Register::X | Register::Y) {
+            self.p.update_negative_flag(source);
+            self.p.update_zero_flag(source);
+        }
         None
     }
 
