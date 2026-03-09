@@ -1,5 +1,3 @@
-use core::panic;
-
 use bitflags::bitflags;
 
 bitflags! {
@@ -215,20 +213,9 @@ impl StackPointer {
         self.value -= 1;
     }
 
-    fn push_word<T: MemoryBus>(&mut self, memory: &mut T, value: u16) {
-        memory.write_word(0x0100 | self.value as u16, value);
-        self.value -= 2;
-    }
-
     fn pop_byte<T: MemoryBus>(&mut self, memory: &T) -> u8 {
         self.value += 1;
         let value = memory.read_byte(0x0100 | self.value as u16);
-        value
-    }
-
-    fn pop_word<T: MemoryBus>(&mut self, memory: &T) -> u16 {
-        self.value += 2;
-        let value = memory.read_word(0x0100 | self.value as u16);
         value
     }
 }
@@ -247,13 +234,14 @@ impl Default for CPU {
 
 impl CPU {
     pub fn new() -> CPU {
+        // Reference value: https://www.nesdev.org/wiki/CPU_power_up_state
         CPU {
             a: 0,
             x: 0,
             y: 0,
             pc: 0,
-            sp: StackPointer::default(),
-            p: StatusRegister::empty(),
+            sp: StackPointer { value: 0xFD },
+            p: StatusRegister::I,
             pending_interrupt_flag_change: None,
         }
     }
@@ -1413,11 +1401,11 @@ impl CPU {
         );
         self.p.update_negative_flag(self.a);
 
-        // If we crossed a memory page, we need do add an extra cycle
+        // If we crossed a memory page, we need to add an extra cycle
         matches!(&operand, Operand::Memory(_, true)).then_some(1)
     }
 
-    /// SBC instruction: Subtract the NOT of the carry flag and an operand from the accumulator.
+    /// SBC instruction: Substracts the NOT of the carry flag and an operand from the accumulator.
     fn instr_sbc<T: MemoryBus>(&mut self, memory: &mut T, operand: Operand) -> Option<u8> {
         let value = match operand {
             Operand::Accumulator => self.a,
@@ -1426,7 +1414,7 @@ impl CPU {
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
-        let result: u16 = self.a as u16 - value as u16 - !self.p.contains(StatusRegister::C) as u16;
+        let result = self.a as u16 + (!value) as u16 + self.p.contains(StatusRegister::C) as u16;
         let prev_value = self.a;
         self.a = result as u8;
         self.p.set(StatusRegister::C, result >= 0x100);
@@ -1434,7 +1422,7 @@ impl CPU {
         // If the result's sign is different from both A's and memory's, signed overflow (or underflow) occurred.
         self.p.set(
             StatusRegister::V,
-            ((self.a ^ prev_value) & (self.a ^ !value) & 0x80) != 0,
+            (self.a ^ prev_value) & (self.a ^ value) & 0x80 != 0,
         );
         self.p.update_negative_flag(self.a);
 
@@ -1462,8 +1450,8 @@ impl CPU {
             Operand::Memory(addr, _) => {
                 let value = memory.read_byte(addr).wrapping_sub(1);
                 memory.write_byte(addr, value);
-                self.p.update_zero_flag(self.a);
-                self.p.update_negative_flag(self.a);
+                self.p.update_zero_flag(value);
+                self.p.update_negative_flag(value);
             }
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         }
@@ -1505,8 +1493,8 @@ impl CPU {
         let bit_test = self.a & value;
 
         self.p.update_zero_flag(bit_test);
-        self.p.set(StatusRegister::V, (value & 0b0100000) > 0);
-        self.p.set(StatusRegister::N, (value & 0b1000000) > 0);
+        self.p.set(StatusRegister::V, (value & 0b01000000) > 0);
+        self.p.set(StatusRegister::N, (value & 0b10000000) > 0);
 
         None
     }
@@ -1527,7 +1515,8 @@ impl CPU {
         let reg = self.get_register(register);
         self.p.set(StatusRegister::C, reg >= value);
         self.p.set(StatusRegister::Z, reg == value);
-        self.p.set(StatusRegister::N, (reg - value) & 0x80 > 0);
+        self.p
+            .set(StatusRegister::N, (reg.wrapping_sub(value)) & 0x80 != 0);
 
         matches!(operand, Operand::Memory(_, true)).then_some(1)
     }
@@ -1589,9 +1578,8 @@ impl CPU {
             Operand::Memory(addr, _) => memory.read_byte(addr),
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
-
-        let shifted_value = ((self.p.contains(StatusRegister::C) as u8) & 0x01) & value << 1;
-        self.p.set(StatusRegister::C, value & 0x80 > 0);
+        let shifted_value = (value << 1) | (self.p.contains(StatusRegister::C) as u8);
+        self.p.set(StatusRegister::C, value & 0x80 != 0);
         self.p.update_zero_flag(shifted_value);
         self.p.update_negative_flag(shifted_value);
 
@@ -1614,8 +1602,8 @@ impl CPU {
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
-        let shifted_value = ((self.p.contains(StatusRegister::C) as u8) << 7) & (value >> 1);
-        self.p.set(StatusRegister::C, value & 0x01 > 0);
+        let shifted_value = (value >> 1) | ((self.p.contains(StatusRegister::C) as u8) << 7);
+        self.p.set(StatusRegister::C, value & 0x01 != 0);
         self.p.update_zero_flag(shifted_value);
         self.p.update_negative_flag(shifted_value);
 
@@ -1745,7 +1733,9 @@ impl CPU {
         memory: &mut T,
         operand: Operand,
     ) -> Option<u8> {
-        self.sp.push_word(memory, self.pc + 2);
+        let new_pc = self.pc + 2;
+        self.sp.push_byte(memory, (new_pc >> 8) as u8);
+        self.sp.push_byte(memory, (new_pc & 0xFF) as u8);
 
         self.pc = match operand {
             Operand::Memory(addr, _) => addr,
@@ -1755,7 +1745,10 @@ impl CPU {
     }
 
     fn instr_return_from_subroutine<T: MemoryBus>(&mut self, memory: &mut T) -> Option<u8> {
-        self.pc = self.sp.pop_word(memory) + 1;
+        let low_byte = self.sp.pop_byte(memory);
+        let high_byte = self.sp.pop_byte(memory);
+
+        self.pc = word_from_bytes(low_byte, high_byte) + 1;
         None
     }
 
@@ -2128,17 +2121,5 @@ mod tests {
         sp.push_byte(&mut memory, second_value);
         assert_eq!(sp.pop_byte(&memory), second_value);
         assert_eq!(sp.pop_byte(&memory), first_value);
-    }
-
-    #[test]
-    fn stack_pointer_should_push_and_pop_words() {
-        let mut memory = MockMemory::new();
-        let mut sp = StackPointer::default();
-        let first_value = 0x1234;
-        let second_value = 0xABCD;
-        sp.push_word(&mut memory, first_value);
-        sp.push_word(&mut memory, second_value);
-        assert_eq!(sp.pop_word(&memory), second_value);
-        assert_eq!(sp.pop_word(&memory), first_value);
     }
 }
