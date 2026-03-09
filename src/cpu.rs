@@ -52,6 +52,8 @@ pub struct CPU {
 
     // status register
     p: StatusRegister,
+
+    pending_interrupt_flag_change: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,6 +116,14 @@ pub enum Instruction {
     PLP,
     TXS,
     TSX,
+    // Flags
+    CLC,
+    SEC,
+    CLI,
+    SEI,
+    CLD,
+    SED,
+    CLV,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -242,12 +252,18 @@ impl CPU {
             pc: 0,
             sp: StackPointer::default(),
             p: StatusRegister::empty(),
+            pending_interrupt_flag_change: None,
         }
     }
 
     /// Step the CPU: fetch the next instruction and execute it
     /// returns the number of cycles it took
     pub fn step<T: MemoryBus>(&mut self, memory: &mut T) -> u8 {
+        // When changing the "disable interrupt" flag through some instruction,
+        // The change is delayed to the next instruction.
+        if let Some(value) = self.pending_interrupt_flag_change {
+            self.p.set(StatusRegister::I, value);
+        }
         // Fetch the next instruction
         let value = self.fetch_byte(memory);
 
@@ -320,6 +336,19 @@ impl CPU {
             Instruction::PLP => self.instr_pull_flags_from_sp(memory),
             Instruction::TSX => self.instr_transfer(Register::SP, Register::X),
             Instruction::TXS => self.instr_transfer(Register::X, Register::SP),
+            Instruction::CLC => self.instr_clear_flag(StatusRegister::C),
+            Instruction::SEC => self.instr_set_flag(StatusRegister::C),
+            Instruction::CLI => {
+                self.pending_interrupt_flag_change = Some(false);
+                None
+            }
+            Instruction::SEI => {
+                self.pending_interrupt_flag_change = Some(true);
+                None
+            }
+            Instruction::CLD => self.instr_clear_flag(StatusRegister::D),
+            Instruction::SED => self.instr_set_flag(StatusRegister::D),
+            Instruction::CLV => self.instr_clear_flag(StatusRegister::V),
         };
 
         opcode.base_cycle + extra_cycles.unwrap_or_default()
@@ -1201,6 +1230,56 @@ impl CPU {
                 base_cycle: 2,
             }),
             // --- END SECTION TXS/TSX ---
+            // --- BEGIN SECTION SET/CLEAR FLAGS ---
+            0x18 => Some(OpCode {
+                instr: Instruction::CLC,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0xD8 => Some(OpCode {
+                instr: Instruction::CLD,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x58 => Some(OpCode {
+                instr: Instruction::CLI,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0xB8 => Some(OpCode {
+                instr: Instruction::CLV,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x18 => Some(OpCode {
+                instr: Instruction::CLC,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x38 => Some(OpCode {
+                instr: Instruction::SEC,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0xF8 => Some(OpCode {
+                instr: Instruction::SED,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x78 => Some(OpCode {
+                instr: Instruction::SEI,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            // --- END SECTION SET/CLEAR FLAGS ---
             _ => None,
         }
     }
@@ -1736,6 +1815,16 @@ impl CPU {
         self.p = StatusRegister::from_bits_truncate(value);
         self.p.remove(StatusRegister::Unused | StatusRegister::B);
 
+        None
+    }
+
+    fn instr_clear_flag(&mut self, flag: StatusRegister) -> Option<u8> {
+        self.p.remove(flag);
+        None
+    }
+
+    fn instr_set_flag(&mut self, flag: StatusRegister) -> Option<u8> {
+        self.p.insert(flag);
         None
     }
 }
