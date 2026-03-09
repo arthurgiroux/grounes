@@ -124,6 +124,8 @@ pub enum Instruction {
     CLD,
     SED,
     CLV,
+    // MISC
+    NOP,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -349,6 +351,7 @@ impl CPU {
             Instruction::CLD => self.instr_clear_flag(StatusRegister::D),
             Instruction::SED => self.instr_set_flag(StatusRegister::D),
             Instruction::CLV => self.instr_clear_flag(StatusRegister::V),
+            Instruction::NOP => None,
         };
 
         opcode.base_cycle + extra_cycles.unwrap_or_default()
@@ -1280,6 +1283,14 @@ impl CPU {
                 base_cycle: 2,
             }),
             // --- END SECTION SET/CLEAR FLAGS ---
+            // --- BEGIN SECTION MISC ---
+            0xEA => Some(OpCode {
+                instr: Instruction::NOP,
+                mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            // --- END SECTION MISC ---
             _ => None,
         }
     }
