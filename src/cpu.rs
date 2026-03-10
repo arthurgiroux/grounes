@@ -1747,7 +1747,7 @@ impl CPU {
         current_flag.set(StatusRegister::B, true);
         self.sp.push_byte(memory, current_flag.bits());
 
-        self.pc = memory.read_word(0xFFFE);
+        self.pc = u16::from_le_bytes([memory.read_byte(0xFFFE), memory.read_byte(0xFFFF)]);
         self.p.set(StatusRegister::I, true);
 
         None
@@ -1838,18 +1838,8 @@ mod tests {
             self.memory[addr as usize]
         }
 
-        fn read_word(&self, addr: u16) -> u16 {
-            u16::from_le_bytes([self.memory[addr as usize], self.memory[(addr + 1) as usize]])
-        }
-
         fn write_byte(&mut self, addr: u16, value: u8) {
             self.memory[addr as usize] = value;
-        }
-
-        fn write_word(&mut self, addr: u16, value: u16) {
-            let [low, high] = value.to_le_bytes();
-            self.memory[addr as usize] = low;
-            self.memory[(addr + 1) as usize] = high;
         }
     }
 
@@ -1877,15 +1867,6 @@ mod tests {
     }
 
     #[test]
-    fn mock_memory_can_write_and_read_words() {
-        let mut memory = MockMemory::new();
-        let addr = 0x12;
-        let value = 0x3456;
-        memory.write_word(addr, value);
-        assert_eq!(memory.read_word(addr), value);
-    }
-
-    #[test]
     fn fetch_byte_reads_current_pc_and_increments_by_one() {
         let mut memory = MockMemory::new();
         let mut cpu = CPU::new();
@@ -1904,7 +1885,8 @@ mod tests {
         let addr = 0x12;
         let value = 0x3456;
         cpu.pc = addr;
-        memory.write_word(addr, value);
+        memory.write_byte(addr, 0x56);
+        memory.write_byte(addr + 1, 0x34);
         assert_eq!(cpu.fetch_word(&memory), value);
         assert_eq!(cpu.pc, addr + 2);
     }
@@ -1974,7 +1956,8 @@ mod tests {
         let mut memory = MockMemory::new();
         let mut cpu = CPU::new();
         let value = 0x1234;
-        memory.write_word(0x00, value);
+        memory.write_byte(0x00, 0x34);
+        memory.write_byte(0x01, 0x12);
         let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::Abs);
         assert_eq!(addr, value);
         assert_eq!(page_crossed, false);
@@ -1984,10 +1967,10 @@ mod tests {
     fn get_operand_abs_x_returns_absolute_16bits_addr_with_x_offset() {
         let mut memory = MockMemory::new();
         let mut cpu = CPU::new();
-        let value = 0x1234;
         let offset = 5;
         cpu.x = offset;
-        memory.write_word(0x00, value);
+        memory.write_byte(0x00, 0x34);
+        memory.write_byte(0x01, 0x12);
         let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsX);
         assert_eq!(addr, 0x1239);
         assert_eq!(page_crossed, false);
@@ -1997,10 +1980,10 @@ mod tests {
     fn get_operand_abs_x_should_wrap_addr() {
         let mut memory = MockMemory::new();
         let mut cpu = CPU::new();
-        let value = 0xFFFE;
         let offset = 5;
         cpu.x = offset;
-        memory.write_word(0x00, value);
+        memory.write_byte(0x00, 0xFE);
+        memory.write_byte(0x01, 0xFF);
         let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsX);
         assert_eq!(addr, 0x0003);
         assert_eq!(page_crossed, true);
@@ -2010,10 +1993,10 @@ mod tests {
     fn get_operand_abs_x_should_allow_crossing_pages() {
         let mut memory = MockMemory::new();
         let mut cpu = CPU::new();
-        let value = 0x01FE;
         let offset = 5;
         cpu.x = offset;
-        memory.write_word(0x00, value);
+        memory.write_byte(0x00, 0xFE);
+        memory.write_byte(0x01, 0x01);
         let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsX);
         assert_eq!(addr, 0x0203);
         assert_eq!(page_crossed, true);
@@ -2023,10 +2006,10 @@ mod tests {
     fn get_operand_abs_y_returns_absolute_16bits_addr_with_y_offset() {
         let mut memory = MockMemory::new();
         let mut cpu = CPU::new();
-        let value = 0x1234;
         let offset = 5;
         cpu.y = offset;
-        memory.write_word(0x00, value);
+        memory.write_byte(0x00, 0x34);
+        memory.write_byte(0x01, 0x12);
         let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsY);
         assert_eq!(addr, 0x1239);
         assert_eq!(page_crossed, false);
@@ -2036,10 +2019,10 @@ mod tests {
     fn get_operand_abs_y_should_wrap_addr() {
         let mut memory = MockMemory::new();
         let mut cpu = CPU::new();
-        let value = 0xFFFE;
         let offset = 5;
         cpu.y = offset;
-        memory.write_word(0x00, value);
+        memory.write_byte(0x00, 0xFE);
+        memory.write_byte(0x01, 0xFF);
         let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsY);
         assert_eq!(addr, 0x0003);
         assert_eq!(page_crossed, true);
@@ -2049,10 +2032,10 @@ mod tests {
     fn get_operand_abs_y_should_allow_crossing_pages() {
         let mut memory = MockMemory::new();
         let mut cpu = CPU::new();
-        let value = 0x01FE;
         let offset = 5;
         cpu.y = offset;
-        memory.write_word(0x00, value);
+        memory.write_byte(0x00, 0xFE);
+        memory.write_byte(0x01, 0x01);
         let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsY);
         assert_eq!(addr, 0x0203);
         assert_eq!(page_crossed, true);
@@ -2062,10 +2045,11 @@ mod tests {
     fn get_operand_ind_returns_indirected_addr() {
         let mut memory = MockMemory::new();
         let mut cpu = CPU::new();
-        let indirection = 0x1234;
         let expected_addr = 0x3456;
-        memory.write_word(0x00, indirection);
-        memory.write_word(indirection, expected_addr);
+        memory.write_byte(0x00, 0x34);
+        memory.write_byte(0x01, 0x12);
+        memory.write_byte(0x1234, 0x56);
+        memory.write_byte(0x1235, 0x34);
         let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::Ind);
         assert_eq!(addr, expected_addr);
         assert_eq!(page_crossed, false);
@@ -2078,9 +2062,12 @@ mod tests {
         // We make sure that the CPU bug is correctly implemented:
         // When the indirect addr is the last one of a page, it will
         // load the second byte from the beginning of the same page instead of the next page.
-        let indirection = 0x12FF;
+        memory.write_byte(0x00, 0xFF);
+        memory.write_byte(0x01, 0x12);
+
         // This should be the indirected address without the CPU bug
-        let ind_addr = 0x3456;
+        memory.write_byte(0x12FF, 0x56);
+        memory.write_byte(0x1300, 0x34);
 
         // We are going to put a value at the beginning of the page to ensure the CPU bug is implemented
         let zp_addr = 0x1200;
@@ -2089,8 +2076,7 @@ mod tests {
         // We expect the high-byte to be from the beginning of the page and the low byte to be from the end of the page
         let expected_addr = 0x8956;
         memory.write_byte(zp_addr, zp_value);
-        memory.write_word(0x00, indirection);
-        memory.write_word(indirection, ind_addr);
+
         let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::Ind);
         assert_eq!(addr, expected_addr);
         assert_eq!(page_crossed, false);
