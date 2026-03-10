@@ -1,3 +1,4 @@
+use crate::memory::MemoryBus;
 use bitflags::bitflags;
 
 bitflags! {
@@ -182,17 +183,6 @@ pub struct OpCode {
     value: u8,
     /// The usual number of cycles that the CPU takes to execute this opcode, additional cycles can be added depending on the addressing mode
     base_cycle: u8,
-}
-
-pub trait MemoryBus {
-    fn read_byte(&self, addr: u16) -> u8;
-    fn read_word(&self, addr: u16) -> u16;
-    fn write_byte(&mut self, addr: u16, value: u8);
-    fn write_word(&mut self, addr: u16, value: u16);
-}
-
-fn word_from_bytes(low: u8, high: u8) -> u16 {
-    (high as u16) << 8 | low as u16
 }
 
 /// A memory page is crossed after an increment operation when the high-byte is increased.
@@ -1246,12 +1236,6 @@ impl CPU {
                 value: opcode,
                 base_cycle: 2,
             }),
-            0x18 => Some(OpCode {
-                instr: Instruction::CLC,
-                mode: AddressingMode::Imp,
-                value: opcode,
-                base_cycle: 2,
-            }),
             0x38 => Some(OpCode {
                 instr: Instruction::SEC,
                 mode: AddressingMode::Imp,
@@ -1293,7 +1277,7 @@ impl CPU {
         let low = memory.read_byte(self.pc);
         let high = memory.read_byte(self.pc + 1);
         self.pc += 2;
-        word_from_bytes(low, high)
+        u16::from_le_bytes([low, high])
     }
 
     fn resolve_operand<T: MemoryBus>(&mut self, memory: &T, mode: AddressingMode) -> Operand {
@@ -1357,7 +1341,7 @@ impl CPU {
                     arg + 1
                 };
                 let high = memory.read_byte(high_addr);
-                let addr = word_from_bytes(low, high);
+                let addr = u16::from_le_bytes([low, high]);
                 (addr, false)
             }
             AddressingMode::IndX => {
@@ -1365,14 +1349,14 @@ impl CPU {
                 let ptr = arg.wrapping_add(self.x);
                 let low = memory.read_byte(ptr as u16);
                 let high = memory.read_byte(ptr.wrapping_add(1) as u16);
-                let addr = word_from_bytes(low, high);
+                let addr = u16::from_le_bytes([low, high]);
                 (addr, false)
             }
             AddressingMode::IndY => {
                 let arg = self.fetch_byte(memory);
                 let low = memory.read_byte(arg as u16);
                 let high = memory.read_byte(arg.wrapping_add(1) as u16);
-                let base_addr = word_from_bytes(low, high);
+                let base_addr = u16::from_le_bytes([low, high]);
                 let addr = base_addr.wrapping_add(self.y as u16);
                 (addr, is_page_crossed(base_addr, addr))
             }
@@ -1745,10 +1729,10 @@ impl CPU {
     }
 
     fn instr_return_from_subroutine<T: MemoryBus>(&mut self, memory: &mut T) -> Option<u8> {
-        let low_byte = self.sp.pop_byte(memory);
-        let high_byte = self.sp.pop_byte(memory);
+        let low = self.sp.pop_byte(memory);
+        let high = self.sp.pop_byte(memory);
 
-        self.pc = word_from_bytes(low_byte, high_byte) + 1;
+        self.pc = u16::from_le_bytes([low, high]) + 1;
         None
     }
 
@@ -1773,7 +1757,7 @@ impl CPU {
         let flags = self.sp.pop_byte(memory);
         let pc_low = self.sp.pop_byte(memory);
         let pc_high = self.sp.pop_byte(memory);
-        self.pc = word_from_bytes(pc_low, pc_high);
+        self.pc = u16::from_le_bytes([pc_low, pc_high]);
 
         self.p = StatusRegister::from_bits_truncate(flags);
         self.p.remove(StatusRegister::Unused | StatusRegister::B);
@@ -1855,7 +1839,7 @@ mod tests {
         }
 
         fn read_word(&self, addr: u16) -> u16 {
-            word_from_bytes(self.memory[addr as usize], self.memory[(addr + 1) as usize])
+            u16::from_le_bytes([self.memory[addr as usize], self.memory[(addr + 1) as usize]])
         }
 
         fn write_byte(&mut self, addr: u16, value: u8) {
@@ -1863,8 +1847,9 @@ mod tests {
         }
 
         fn write_word(&mut self, addr: u16, value: u16) {
-            self.memory[addr as usize] = value as u8;
-            self.memory[(addr + 1) as usize] = (value >> 8) as u8;
+            let [low, high] = value.to_le_bytes();
+            self.memory[addr as usize] = low;
+            self.memory[(addr + 1) as usize] = high;
         }
     }
 
