@@ -5,8 +5,24 @@ pub trait MemoryBus {
     fn write_byte(&mut self, addr: u16, value: u8);
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MemoryRegion {
+    Ram,
+    OpenBus,
+}
+
+/// Pure address-to-region mapping. Returns (region, local_offset).
+/// Ram: 0x0000..0x2000 with mirroring (offset = addr % 2048).
+pub fn map_address(addr: u16) -> (MemoryRegion, u16) {
+    if addr <= 0x1FFF {
+        (MemoryRegion::Ram, addr % 2048)
+    } else {
+        (MemoryRegion::OpenBus, 0)
+    }
+}
+
 pub struct RAM {
-    memory: Vec<u8>,
+    pub memory: Vec<u8>,
 }
 
 impl RAM {
@@ -21,8 +37,30 @@ impl MemoryBus for RAM {
     fn read_byte(&self, addr: u16) -> u8 {
         self.memory[addr as usize]
     }
-    
+
     fn write_byte(&mut self, addr: u16, value: u8) {
         self.memory[addr as usize] = value;
+    }
+}
+
+/// View over device(s) used at step time; implements MemoryBus using map_address.
+pub struct BusView<'a> {
+    pub ram: &'a mut RAM,
+}
+
+impl MemoryBus for BusView<'_> {
+    fn read_byte(&self, addr: u16) -> u8 {
+        let (region, offset) = map_address(addr);
+        match region {
+            MemoryRegion::Ram => self.ram.read_byte(offset),
+            MemoryRegion::OpenBus => 0,
+        }
+    }
+
+    fn write_byte(&mut self, addr: u16, value: u8) {
+        let (region, offset) = map_address(addr);
+        if let MemoryRegion::Ram = region {
+            self.ram.write_byte(offset, value);
+        }
     }
 }

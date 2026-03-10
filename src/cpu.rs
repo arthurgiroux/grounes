@@ -236,6 +236,11 @@ impl CPU {
         }
     }
 
+    pub fn power_up<T: MemoryBus>(&mut self, memory: &T) {
+        // Reference value: https://www.nesdev.org/wiki/CPU_power_up_state
+        self.pc = u16::from_le_bytes([memory.read_byte(0xFFFC), memory.read_byte(0xFFFD)]);
+    }
+
     /// Step the CPU: fetch the next instruction and execute it
     /// returns the number of cycles it took
     pub fn step<T: MemoryBus>(&mut self, memory: &mut T) -> u8 {
