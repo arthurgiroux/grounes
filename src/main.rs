@@ -5,5 +5,6 @@ pub mod memory;
 use crate::emulator::Emulator;
 
 fn main() {
-    let emulator = Emulator::new();
+    let mut emulator = Emulator::new();
+    emulator.power_up();
 }
