@@ -1,5 +1,6 @@
 pub mod cpu;
 pub mod emulator;
+pub mod ines;
 pub mod memory;
 
 use crate::emulator::Emulator;
