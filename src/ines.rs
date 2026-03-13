@@ -2,7 +2,6 @@ use std::io::BufReader;
 use std::path::Path;
 use std::result::Result;
 use std::{fs::File, io::Read};
-
 pub struct INES {
     pub header: INESHeader,
     /// Trainer, if present (0 or 512 bytes)
@@ -42,7 +41,7 @@ impl From<std::io::Error> for InesParseError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum NametableArrangement {
     Vertical,
     Horizontal,
@@ -119,7 +118,9 @@ pub fn parse_file(filepath: &str) -> Result<INES, InesParseError> {
         trainer,
         prg_rom,
         chr_rom,
+        // TODO
         playchoice_inst_rom: None,
+        // TODO
         playchoice_prom: None,
     })
 }
@@ -127,6 +128,12 @@ pub fn parse_file(filepath: &str) -> Result<INES, InesParseError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn create_valid_header() -> Vec<u8> {
+        let mut header = vec![0u8; 16];
+        header[0..4].copy_from_slice(b"NES\x1A");
+        header
+    }
 
     #[test]
     fn parse_header_with_wrong_magic_returns_invalid_header_error() {
@@ -149,7 +156,92 @@ mod tests {
     }
 
     #[test]
+    fn parse_header_should_read_prg_rom_size() {
+        let mut buffer = create_valid_header();
+        let prg_rom_size = 7;
+        buffer[4] = prg_rom_size;
+        let header = INESHeader::try_from(buffer.as_slice());
+        assert_eq!(header.unwrap().prg_rom_size, prg_rom_size as usize);
+    }
+
+    #[test]
+    fn parse_header_should_read_chr_rom_size() {
+        let mut buffer = create_valid_header();
+        let chr_rom_size = 5;
+        buffer[5] = chr_rom_size;
+        let header = INESHeader::try_from(buffer.as_slice());
+        assert_eq!(header.unwrap().chr_rom_size, chr_rom_size as usize);
+    }
+
+    #[test]
+    fn parse_header_should_read_mapper() {
+        let mut buffer = create_valid_header();
+        let expected_mapper = 0x12;
+        // lower nibble goes at the top of flag 6
+        buffer[6] = (expected_mapper & 0x0F) << 4;
+        // upper nibble goes in flag 7
+        buffer[7] = expected_mapper & 0xF0;
+        let header = INESHeader::try_from(buffer.as_slice());
+        assert_eq!(header.unwrap().mapper_number, expected_mapper);
+    }
+
+    #[test]
+    fn parse_header_should_read_battery() {
+        let mut buffer = create_valid_header();
+        buffer[6] = 0b00000000;
+        let header = INESHeader::try_from(buffer.as_slice());
+        assert!(!header.unwrap().has_battery);
+
+        buffer[6] = 0b00000010;
+        let header = INESHeader::try_from(buffer.as_slice());
+        assert!(header.unwrap().has_battery);
+    }
+
+    #[test]
+    fn parse_header_should_read_trainer() {
+        let mut buffer = create_valid_header();
+        buffer[6] = 0b00000000;
+        let header = INESHeader::try_from(buffer.as_slice());
+        assert!(!header.unwrap().has_trainer);
+
+        buffer[6] = 0b00000100;
+        let header = INESHeader::try_from(buffer.as_slice());
+        assert!(header.unwrap().has_trainer);
+    }
+
+    #[test]
+    fn parse_header_should_read_alternative_nametable_layout() {
+        let mut buffer = create_valid_header();
+        buffer[6] = 0b00000000;
+        let header = INESHeader::try_from(buffer.as_slice());
+        assert!(!header.unwrap().use_alternative_nametable_layout);
+
+        buffer[6] = 0b00001000;
+        let header = INESHeader::try_from(buffer.as_slice());
+        assert!(header.unwrap().use_alternative_nametable_layout);
+    }
+
+    #[test]
+    fn parse_header_should_read_nametable_arrangement() {
+        let mut buffer = create_valid_header();
+        buffer[6] = 0b00000000;
+        let header = INESHeader::try_from(buffer.as_slice());
+        assert_eq!(
+            header.unwrap().nametable_arrangement,
+            NametableArrangement::Vertical
+        );
+
+        buffer[6] = 0b00000001;
+        let header = INESHeader::try_from(buffer.as_slice());
+        assert_eq!(
+            header.unwrap().nametable_arrangement,
+            NametableArrangement::Horizontal
+        );
+    }
+
+    #[test]
     fn parse_file_test() {
-        let file = parse_file("data/nestest.nes");
+        let parsed = parse_file("data/nestest.nes");
+        println!("{:?}", parsed.unwrap().header);
     }
 }
