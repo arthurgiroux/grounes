@@ -2,6 +2,7 @@ use std::io::BufReader;
 use std::path::Path;
 use std::result::Result;
 use std::{fs::File, io::Read};
+
 pub struct INES {
     pub header: INESHeader,
     /// Trainer, if present (0 or 512 bytes)
@@ -14,6 +15,8 @@ pub struct INES {
     pub playchoice_inst_rom: Option<Vec<u8>>,
     /// PlayChoice PROM, if present (16 bytes Data, 16 bytes CounterOut) (this is often missing; see PC10 ROM-Images for details)
     pub playchoice_prom: Option<Vec<u8>>,
+
+    pub prg_ram: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]
@@ -22,6 +25,8 @@ pub enum InesParseError {
     InvalidHeader,
     Io(std::io::Error),
 }
+
+impl std::error::Error for InesParseError {}
 
 impl std::fmt::Display for InesParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -122,6 +127,8 @@ pub fn parse_file(filepath: &str) -> Result<INES, InesParseError> {
         playchoice_inst_rom: None,
         // TODO
         playchoice_prom: None,
+        // TODO
+        prg_ram: None,
     })
 }
 
