@@ -238,7 +238,8 @@ impl CPU {
 
     pub fn power_up<T: MemoryBus>(&mut self, memory: &T) {
         // Reference value: https://www.nesdev.org/wiki/CPU_power_up_state
-        self.pc = u16::from_le_bytes([memory.read_byte(0xFFFC), memory.read_byte(0xFFFD)]);
+        //self.pc = u16::from_le_bytes([memory.read_byte(0xFFFC), memory.read_byte(0xFFFD)]);
+        self.pc = 0xC000;
     }
 
     /// Step the CPU: fetch the next instruction and execute it
@@ -249,9 +250,12 @@ impl CPU {
         if let Some(value) = self.pending_interrupt_flag_change {
             self.p.set(StatusRegister::I, value);
         }
+        let pc = self.pc;
+
         // Fetch the next instruction
         let value = self.fetch_byte(memory);
 
+        println!("got opcode {:X}", value);
         // Decode it
         let opcode = self.decode(value).expect("Unknown opcode");
         let operand = self.resolve_operand(memory, opcode.mode);
@@ -337,7 +341,15 @@ impl CPU {
             Instruction::NOP => None,
         };
 
-        opcode.base_cycle + extra_cycles.unwrap_or_default()
+        let cycles = opcode.base_cycle + extra_cycles.unwrap_or_default();
+
+        // C000  4C F5 C5  JMP $C5F5                       A:00 X:00 Y:00 P:24 SP:FD PPU:  0, 21 CYC:7
+        println!(
+            "{:X} {:X} A:{:X} X:{:X} Y:{:X} P:{:X} SP:{:X} PPU:  0, 0 CYC:{:X}",
+            pc, value, self.a, self.x, self.y, self.p, self.sp.value, cycles
+        );
+
+        cycles
     }
 
     pub fn decode(&self, opcode: u8) -> Option<OpCode> {
@@ -752,6 +764,42 @@ impl CPU {
                 mode: AddressingMode::IndY,
                 value: opcode,
                 base_cycle: 6,
+            }),
+            0x86 => Some(OpCode {
+                instr: Instruction::STX,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0x96 => Some(OpCode {
+                instr: Instruction::STX,
+                mode: AddressingMode::ZpY,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x8E => Some(OpCode {
+                instr: Instruction::STA,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x84 => Some(OpCode {
+                instr: Instruction::STY,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0x94 => Some(OpCode {
+                instr: Instruction::STY,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x8C => Some(OpCode {
+                instr: Instruction::STY,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
             }),
             // --- END SECTION STORE ---
             // --- BEGIN SECTION TRANSFER ---

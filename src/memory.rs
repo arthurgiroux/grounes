@@ -20,7 +20,7 @@ pub fn map_address(addr: u16) -> (MemoryRegion, u16) {
     if addr <= 0x1FFF {
         (MemoryRegion::Ram, addr % 2048)
     } else if addr >= 0x4020 {
-        (MemoryRegion::Cartridge, addr - 0x4020)
+        (MemoryRegion::Cartridge, addr)
     } else {
         (MemoryRegion::OpenBus, 0)
     }
@@ -57,6 +57,7 @@ pub struct BusView<'a> {
 impl MemoryBus for BusView<'_> {
     fn read_byte(&self, addr: u16) -> u8 {
         let (region, offset) = map_address(addr);
+        println!("Reading from {:?} with offset={:X}", region, offset);
         match region {
             MemoryRegion::Ram => self.ram.read_byte(offset),
             MemoryRegion::Cartridge => self.mapper.read_byte(MapperSource::CPU, offset),
@@ -66,6 +67,7 @@ impl MemoryBus for BusView<'_> {
 
     fn write_byte(&mut self, addr: u16, value: u8) {
         let (region, offset) = map_address(addr);
+        println!("Writing to {:?} with offset={:X}", region, offset);
         if let MemoryRegion::Ram = region {
             self.ram.write_byte(offset, value);
         }
@@ -118,11 +120,12 @@ impl Mapper for Mapper0 {
                 }
                 // CPU $C000-$FFFF: Last 16 KiB of PRG-ROM (NROM-256) or mirror of $8000-$BFFF (NROM-128).
                 else if addr >= 0xC000 && addr <= 0xFFFF {
-                    let rom_offset = if self.ines.prg_rom.len() >= 0x4000 {
+                    let rom_offset = if self.ines.prg_rom.len() > 0x4000 {
                         0x4000
                     } else {
                         0
                     };
+
                     self.ines.prg_rom.get(address - 0xC000 + rom_offset)
                 } else {
                     None
