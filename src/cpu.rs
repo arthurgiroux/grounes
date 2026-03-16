@@ -3,7 +3,7 @@ use bitflags::bitflags;
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    struct StatusRegister: u8 {
+    pub struct StatusRegister: u8 {
         /// Carry flag: set after some operations if it carried over
         const C = 0b00000001;
         /// Zero flag: set if the result of the last operation is zero
@@ -37,17 +37,17 @@ impl StatusRegister {
 #[derive(Debug)]
 pub struct CPU {
     /// accumulator
-    a: u8,
+    pub a: u8,
 
     // Indexes, used for several addressing modes
-    x: u8,
-    y: u8,
+    pub x: u8,
+    pub y: u8,
 
     // Program counter
-    pc: u16,
+    pub pc: u16,
 
     // stack pointer
-    sp: StackPointer,
+    pub sp: StackPointer,
 
     // status register
     p: StatusRegister,
@@ -191,19 +191,19 @@ fn is_page_crossed(base_addr: u16, incremented_addr: u16) -> bool {
 }
 
 #[derive(Debug)]
-struct StackPointer {
+pub struct StackPointer {
     value: u8,
 }
 
 /// An "Empty Descending" stack pointer.
 /// The stack pointer points to the last valid data item pushed onto the stack.
 impl StackPointer {
-    fn push_byte<T: MemoryBus>(&mut self, memory: &mut T, value: u8) {
+    pub fn push_byte<T: MemoryBus>(&mut self, memory: &mut T, value: u8) {
         memory.write_byte(0x0100 | self.value as u16, value);
         self.value -= 1;
     }
 
-    fn pop_byte<T: MemoryBus>(&mut self, memory: &T) -> u8 {
+    pub fn pop_byte<T: MemoryBus>(&mut self, memory: &T) -> u8 {
         self.value += 1;
         let value = memory.read_byte(0x0100 | self.value as u16);
         value
@@ -231,7 +231,7 @@ impl CPU {
             y: 0,
             pc: 0,
             sp: StackPointer { value: 0xFD },
-            p: StatusRegister::I,
+            p: StatusRegister::I | StatusRegister::Unused,
             pending_interrupt_flag_change: None,
         }
     }
@@ -244,7 +244,7 @@ impl CPU {
 
     /// Step the CPU: fetch the next instruction and execute it
     /// returns the number of cycles it took
-    pub fn step<T: MemoryBus>(&mut self, memory: &mut T) -> u8 {
+    pub fn step<T: MemoryBus>(&mut self, memory: &mut T) -> (u8, u8) {
         // When changing the "disable interrupt" flag through some instruction,
         // The change is delayed to the next instruction.
         if let Some(value) = self.pending_interrupt_flag_change {
@@ -261,61 +261,61 @@ impl CPU {
         let operand = self.resolve_operand(memory, opcode.mode);
 
         let extra_cycles = match opcode.instr {
-            Instruction::ADC => self.instr_adc(memory, operand),
-            Instruction::SBC => self.instr_sbc(memory, operand),
-            Instruction::INC => self.instr_inc(memory, operand),
-            Instruction::DEC => self.instr_dec(memory, operand),
+            Instruction::ADC => self.instr_adc(memory, operand.unwrap()),
+            Instruction::SBC => self.instr_sbc(memory, operand.unwrap()),
+            Instruction::INC => self.instr_inc(memory, operand.unwrap()),
+            Instruction::DEC => self.instr_dec(memory, operand.unwrap()),
             Instruction::INX => self.generic_register_arithmetic(Register::X, ArithmeticOp::Inc),
             Instruction::DEX => self.generic_register_arithmetic(Register::X, ArithmeticOp::Dec),
             Instruction::INY => self.generic_register_arithmetic(Register::Y, ArithmeticOp::Inc),
             Instruction::DEY => self.generic_register_arithmetic(Register::Y, ArithmeticOp::Dec),
-            Instruction::AND => self.instr_bitwise(memory, operand, BitwiseOp::And),
-            Instruction::ORA => self.instr_bitwise(memory, operand, BitwiseOp::Or),
-            Instruction::EOR => self.instr_bitwise(memory, operand, BitwiseOp::Xor),
-            Instruction::BIT => self.instr_bit(memory, operand),
-            Instruction::ASL => self.instr_asl(memory, operand),
-            Instruction::LSR => self.instr_lsr(memory, operand),
-            Instruction::ROL => self.instr_rol(memory, operand),
-            Instruction::ROR => self.instr_ror(memory, operand),
+            Instruction::AND => self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::And),
+            Instruction::ORA => self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::Or),
+            Instruction::EOR => self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::Xor),
+            Instruction::BIT => self.instr_bit(memory, operand.unwrap()),
+            Instruction::ASL => self.instr_asl(memory, operand.unwrap()),
+            Instruction::LSR => self.instr_lsr(memory, operand.unwrap()),
+            Instruction::ROL => self.instr_rol(memory, operand.unwrap()),
+            Instruction::ROR => self.instr_ror(memory, operand.unwrap()),
             Instruction::BCC => {
-                self.generic_instr_branch(operand, !self.p.contains(StatusRegister::C))
+                self.generic_instr_branch(operand.unwrap(), !self.p.contains(StatusRegister::C))
             }
             Instruction::BCS => {
-                self.generic_instr_branch(operand, self.p.contains(StatusRegister::C))
+                self.generic_instr_branch(operand.unwrap(), self.p.contains(StatusRegister::C))
             }
             Instruction::BEQ => {
-                self.generic_instr_branch(operand, self.p.contains(StatusRegister::Z))
+                self.generic_instr_branch(operand.unwrap(), self.p.contains(StatusRegister::Z))
             }
             Instruction::BNE => {
-                self.generic_instr_branch(operand, !self.p.contains(StatusRegister::Z))
+                self.generic_instr_branch(operand.unwrap(), !self.p.contains(StatusRegister::Z))
             }
             Instruction::BPL => {
-                self.generic_instr_branch(operand, !self.p.contains(StatusRegister::N))
+                self.generic_instr_branch(operand.unwrap(), !self.p.contains(StatusRegister::N))
             }
             Instruction::BMI => {
-                self.generic_instr_branch(operand, self.p.contains(StatusRegister::N))
+                self.generic_instr_branch(operand.unwrap(), self.p.contains(StatusRegister::N))
             }
             Instruction::BVC => {
-                self.generic_instr_branch(operand, !self.p.contains(StatusRegister::V))
+                self.generic_instr_branch(operand.unwrap(), !self.p.contains(StatusRegister::V))
             }
             Instruction::BVS => {
-                self.generic_instr_branch(operand, self.p.contains(StatusRegister::V))
+                self.generic_instr_branch(operand.unwrap(), self.p.contains(StatusRegister::V))
             }
-            Instruction::LDA => self.instr_load(memory, Register::A, operand),
-            Instruction::LDX => self.instr_load(memory, Register::X, operand),
-            Instruction::LDY => self.instr_load(memory, Register::Y, operand),
-            Instruction::STA => self.instr_store(memory, Register::A, operand),
-            Instruction::STX => self.instr_store(memory, Register::X, operand),
-            Instruction::STY => self.instr_store(memory, Register::Y, operand),
+            Instruction::LDA => self.instr_load(memory, Register::A, operand.unwrap()),
+            Instruction::LDX => self.instr_load(memory, Register::X, operand.unwrap()),
+            Instruction::LDY => self.instr_load(memory, Register::Y, operand.unwrap()),
+            Instruction::STA => self.instr_store(memory, Register::A, operand.unwrap()),
+            Instruction::STX => self.instr_store(memory, Register::X, operand.unwrap()),
+            Instruction::STY => self.instr_store(memory, Register::Y, operand.unwrap()),
             Instruction::TAX => self.instr_transfer(Register::A, Register::X),
             Instruction::TAY => self.instr_transfer(Register::A, Register::Y),
             Instruction::TXA => self.instr_transfer(Register::X, Register::A),
             Instruction::TYA => self.instr_transfer(Register::Y, Register::A),
-            Instruction::CMP => self.instr_compare(memory, operand, Register::A),
-            Instruction::CPX => self.instr_compare(memory, operand, Register::X),
-            Instruction::CPY => self.instr_compare(memory, operand, Register::Y),
-            Instruction::JMP => self.instr_jump(operand),
-            Instruction::JSR => self.instr_jump_to_subroutine(memory, operand),
+            Instruction::CMP => self.instr_compare(memory, operand.unwrap(), Register::A),
+            Instruction::CPX => self.instr_compare(memory, operand.unwrap(), Register::X),
+            Instruction::CPY => self.instr_compare(memory, operand.unwrap(), Register::Y),
+            Instruction::JMP => self.instr_jump(operand.unwrap()),
+            Instruction::JSR => self.instr_jump_to_subroutine(memory, operand.unwrap()),
             Instruction::RTS => self.instr_return_from_subroutine(memory),
             Instruction::BRK => self.instr_break(memory),
             Instruction::RTI => self.instr_return_from_interrupt(memory),
@@ -349,7 +349,7 @@ impl CPU {
             pc, value, self.a, self.x, self.y, self.p, self.sp.value, cycles
         );
 
-        cycles
+        (value, cycles)
     }
 
     pub fn decode(&self, opcode: u8) -> Option<OpCode> {
@@ -1333,14 +1333,19 @@ impl CPU {
         u16::from_le_bytes([low, high])
     }
 
-    fn resolve_operand<T: MemoryBus>(&mut self, memory: &T, mode: AddressingMode) -> Operand {
+    fn resolve_operand<T: MemoryBus>(
+        &mut self,
+        memory: &T,
+        mode: AddressingMode,
+    ) -> Option<Operand> {
         match mode {
-            AddressingMode::Imm => Operand::Immediate(self.fetch_byte(memory)),
-            AddressingMode::Acc => Operand::Accumulator,
-            AddressingMode::Rel => Operand::Relative(self.fetch_byte(memory) as i8),
+            AddressingMode::Imm => Some(Operand::Immediate(self.fetch_byte(memory))),
+            AddressingMode::Acc => Some(Operand::Accumulator),
+            AddressingMode::Rel => Some(Operand::Relative(self.fetch_byte(memory) as i8)),
+            AddressingMode::Imp => None,
             _ => {
                 let (addr, page_crossed) = self.get_operand_address(memory, mode);
-                Operand::Memory(addr, page_crossed)
+                Some(Operand::Memory(addr, page_crossed))
             }
         }
     }
