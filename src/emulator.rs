@@ -76,29 +76,16 @@ mod tests {
                     u16::from_str_radix(bytes.split_ascii_whitespace().next().unwrap(), 16)
                         .unwrap();
                 let disasm = &caps[3]; // "JMP $C5F5"
-                let a = u16::from_str_radix(&caps[4], 16).unwrap(); // "00"
-                let x = u16::from_str_radix(&caps[5], 16).unwrap(); // "00"
-                let y = u16::from_str_radix(&caps[6], 16).unwrap(); // "00"
-                let p = u16::from_str_radix(&caps[7], 16).unwrap(); // "24"
+                let a = u8::from_str_radix(&caps[4], 16).unwrap(); // "00"
+                let x = u8::from_str_radix(&caps[5], 16).unwrap(); // "00"
+                let y = u8::from_str_radix(&caps[6], 16).unwrap(); // "00"
+                let p = u8::from_str_radix(&caps[7], 16).unwrap(); // "24"
                 let sp = &caps[8]; // "FD"
                 let ppu_dot = &caps[9]; // "0"
                 let ppu_cyc = &caps[10]; // "21"
                 let cyc = &caps[11]; // "7"
 
-                assert_eq!(
-                    pc, emulator.cpu.pc,
-                    "PC mismatch on line {}, got={:X} but expected {:X}",
-                    line_number, emulator.cpu.pc, pc
-                );
-                assert_eq!(
-                    a,
-                    emulator.cpu.a.into(),
-                    "register 'a' mismatch on line {} for opcode={:X}, got={:X} but expected {:X}",
-                    line_number,
-                    ref_opcode,
-                    emulator.cpu.a,
-                    a
-                );
+                assert_eq!((pc, a, p), (emulator.cpu.pc, emulator.cpu.a.into(), emulator.cpu.p.bits()), "Mismatch on line {}, expected:\n\t{}\n Got:\n\t{}", line_number, line, emulator.cpu);
                 let (opcode, cycles) = emulator.step();
                 assert_eq!(
                     ref_opcode,
