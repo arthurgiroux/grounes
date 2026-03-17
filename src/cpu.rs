@@ -1,5 +1,6 @@
 use crate::memory::MemoryBus;
 use bitflags::bitflags;
+use std::fmt;
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,9 +51,15 @@ pub struct CPU {
     pub sp: StackPointer,
 
     // status register
-    p: StatusRegister,
+    pub p: StatusRegister,
 
     pending_interrupt_flag_change: Option<bool>,
+}
+
+impl fmt::Display for CPU {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "PC:{:04X} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}", self.pc, self.a, self.x, self.y, self.p.bits(), self.sp.value)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -255,7 +262,6 @@ impl CPU {
         // Fetch the next instruction
         let value = self.fetch_byte(memory);
 
-        println!("got opcode {:X}", value);
         // Decode it
         let opcode = self.decode(value).expect("Unknown opcode");
         let operand = self.resolve_operand(memory, opcode.mode);
@@ -342,12 +348,6 @@ impl CPU {
         };
 
         let cycles = opcode.base_cycle + extra_cycles.unwrap_or_default();
-
-        // C000  4C F5 C5  JMP $C5F5                       A:00 X:00 Y:00 P:24 SP:FD PPU:  0, 21 CYC:7
-        println!(
-            "{:X} {:X} A:{:X} X:{:X} Y:{:X} P:{:X} SP:{:X} PPU:  0, 0 CYC:{:X}",
-            pc, value, self.a, self.x, self.y, self.p, self.sp.value, cycles
-        );
 
         (value, cycles)
     }
@@ -1859,7 +1859,7 @@ impl CPU {
         let value = self.sp.pop_byte(memory);
 
         self.p = StatusRegister::from_bits_truncate(value);
-        self.p.remove(StatusRegister::Unused | StatusRegister::B);
+        self.p.remove(StatusRegister::B);
 
         None
     }
