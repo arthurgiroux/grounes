@@ -1775,9 +1775,9 @@ impl CPU {
         memory: &mut T,
         operand: Operand,
     ) -> Option<u8> {
-        let new_pc = self.pc + 2;
-        self.sp.push_byte(memory, (new_pc >> 8) as u8);
-        self.sp.push_byte(memory, (new_pc & 0xFF) as u8);
+        let [low, high] = self.pc.to_le_bytes();
+        self.sp.push_byte(memory, high);
+        self.sp.push_byte(memory, low);
 
         self.pc = match operand {
             Operand::Memory(addr, _) => addr,
@@ -1790,7 +1790,7 @@ impl CPU {
         let low = self.sp.pop_byte(memory);
         let high = self.sp.pop_byte(memory);
 
-        self.pc = u16::from_le_bytes([low, high]) + 1;
+        self.pc = u16::from_le_bytes([low, high]);
         None
     }
 
