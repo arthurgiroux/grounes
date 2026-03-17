@@ -1464,7 +1464,7 @@ impl CPU {
         // If the result's sign is different from both A's and memory's, signed overflow (or underflow) occurred.
         self.p.set(
             StatusRegister::V,
-            (self.a ^ prev_value) & (self.a ^ value) & 0x80 != 0,
+            (self.a ^ prev_value) & (self.a ^ !value) & 0x80 != 0,
         );
         self.p.update_negative_flag(self.a);
 
