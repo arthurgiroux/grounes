@@ -778,7 +778,7 @@ impl CPU {
                 base_cycle: 4,
             }),
             0x8E => Some(OpCode {
-                instr: Instruction::STA,
+                instr: Instruction::STX,
                 mode: AddressingMode::Abs,
                 value: opcode,
                 base_cycle: 4,
