@@ -57,7 +57,6 @@ pub struct BusView<'a> {
 impl MemoryBus for BusView<'_> {
     fn read_byte(&self, addr: u16) -> u8 {
         let (region, offset) = map_address(addr);
-        println!("Reading from {:?} with offset={:X}", region, offset);
         match region {
             MemoryRegion::Ram => self.ram.read_byte(offset),
             MemoryRegion::Cartridge => self.mapper.read_byte(MapperSource::CPU, offset),
@@ -67,7 +66,6 @@ impl MemoryBus for BusView<'_> {
 
     fn write_byte(&mut self, addr: u16, value: u8) {
         let (region, offset) = map_address(addr);
-        println!("Writing to {:?} with offset={:X}", region, offset);
         if let MemoryRegion::Ram = region {
             self.ram.write_byte(offset, value);
         }
