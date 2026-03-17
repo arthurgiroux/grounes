@@ -1817,8 +1817,8 @@ impl CPU {
         let pc_high = self.sp.pop_byte(memory);
         self.pc = u16::from_le_bytes([pc_low, pc_high]);
 
-        self.p = StatusRegister::from_bits_truncate(flags);
-        self.p.remove(StatusRegister::Unused | StatusRegister::B);
+        self.p = StatusRegister::from_bits_truncate(flags).union(StatusRegister::Unused);
+        self.p.remove(StatusRegister::B);
 
         None
     }
@@ -1849,7 +1849,7 @@ impl CPU {
     }
 
     fn instr_push_flags_to_sp<T: MemoryBus>(&mut self, memory: &mut T) -> Option<u8> {
-        let flags = self.p.union(StatusRegister::B | StatusRegister::Unused);
+        let flags = self.p.union(StatusRegister::B);
         self.sp.push_byte(memory, flags.bits());
 
         None
@@ -1858,7 +1858,7 @@ impl CPU {
     fn instr_pull_flags_from_sp<T: MemoryBus>(&mut self, memory: &T) -> Option<u8> {
         let value = self.sp.pop_byte(memory);
 
-        self.p = StatusRegister::from_bits_truncate(value);
+        self.p = StatusRegister::from_bits_truncate(value).union(StatusRegister::Unused);
         self.p.remove(StatusRegister::B);
 
         None
