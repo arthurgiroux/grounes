@@ -92,6 +92,7 @@ pub enum Instruction {
     INY,
     DEY,
     ISB, // undocumented opcode, performs INC + SBC
+    DCP, // undocumented opcode, performs DEC + CMP
     // Load
     LDA,
     LDX,
@@ -289,6 +290,10 @@ impl CPU {
                 self.instr_sbc(memory, operand.unwrap())
             }
             Instruction::DEC => self.instr_dec(memory, operand.unwrap()),
+            Instruction::DCP => {
+                self.instr_dec(memory, operand.unwrap());
+                self.instr_compare(memory, operand.unwrap(), Register::A)
+            }
             Instruction::INX => self.generic_register_arithmetic(Register::X, ArithmeticOp::Inc),
             Instruction::DEX => self.generic_register_arithmetic(Register::X, ArithmeticOp::Dec),
             Instruction::INY => self.generic_register_arithmetic(Register::Y, ArithmeticOp::Inc),
@@ -559,7 +564,7 @@ impl CPU {
                 value: opcode,
                 base_cycle: 5,
             }),
-            // --- END SECTION SBC ---
+            // --- END SECTION ISB ---
             // --- BEGIN SECTION DEC ---
             0xC6 => Some(OpCode {
                 instr: Instruction::DEC,
@@ -598,6 +603,50 @@ impl CPU {
                 base_cycle: 2,
             }),
             // --- END SECTION DEC ---
+            // --- BEGIN SECTION DCP ---
+            0xC7 => Some(OpCode {
+                instr: Instruction::DCP,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0xD7 => Some(OpCode {
+                instr: Instruction::DCP,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xCF => Some(OpCode {
+                instr: Instruction::DCP,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xDF => Some(OpCode {
+                instr: Instruction::DCP,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xDB => Some(OpCode {
+                instr: Instruction::DCP,
+                mode: AddressingMode::AbsY,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xC3 => Some(OpCode {
+                instr: Instruction::DCP,
+                mode: AddressingMode::IndX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0xD3 => Some(OpCode {
+                instr: Instruction::DCP,
+                mode: AddressingMode::IndY,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            // --- END SECTION DCP ---
             // --- BEGIN SECTION ASL ---
             0x0A => Some(OpCode {
                 instr: Instruction::ASL,
