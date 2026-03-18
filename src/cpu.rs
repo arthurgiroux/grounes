@@ -1309,9 +1309,39 @@ impl CPU {
             }),
             // --- END SECTION SET/CLEAR FLAGS ---
             // --- BEGIN SECTION MISC ---
-            0xEA => Some(OpCode {
+            0x04 | 0x44 | 0x64 => Some(OpCode {
+                instr: Instruction::NOP,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => Some(OpCode {
+                instr: Instruction::NOP,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x0C => Some(OpCode {
+                instr: Instruction::NOP,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xEA | 0xFA => Some(OpCode {
                 instr: Instruction::NOP,
                 mode: AddressingMode::Imp,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x80 => Some(OpCode {
+                instr: Instruction::NOP,
+                mode: AddressingMode::Imm,
+                value: opcode,
+                base_cycle: 2,
+            }),
+            0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => Some(OpCode {
+                instr: Instruction::NOP,
+                mode: AddressingMode::AbsX,
                 value: opcode,
                 base_cycle: 2,
             }),
