@@ -1775,7 +1775,8 @@ impl CPU {
         memory: &mut T,
         operand: Operand,
     ) -> Option<u8> {
-        let [low, high] = self.pc.to_le_bytes();
+        // JSR pushes the pc that points right before the next instruction
+        let [low, high] = self.pc.wrapping_sub(1).to_le_bytes();
         self.sp.push_byte(memory, high);
         self.sp.push_byte(memory, low);
 
@@ -1790,7 +1791,8 @@ impl CPU {
         let low = self.sp.pop_byte(memory);
         let high = self.sp.pop_byte(memory);
 
-        self.pc = u16::from_le_bytes([low, high]);
+        // Since JSR pushed the address before the next instruction, we need to increment by one
+        self.pc = u16::from_le_bytes([low, high]).wrapping_add(1);
         None
     }
 
