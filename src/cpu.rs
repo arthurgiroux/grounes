@@ -424,7 +424,7 @@ impl CPU {
             }),
             // --- END SECTION ADC ---
             // --- BEGIN SECTION SBC ---
-            0xE9 => Some(OpCode {
+            0xE9 | 0xEB => Some(OpCode {
                 instr: Instruction::SBC,
                 mode: AddressingMode::Imm,
                 value: opcode,
