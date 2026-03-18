@@ -85,7 +85,18 @@ mod tests {
                 let ppu_cyc = &caps[10]; // "21"
                 let cyc = &caps[11]; // "7"
 
-                assert_eq!((pc, a, p), (emulator.cpu.pc, emulator.cpu.a.into(), emulator.cpu.p.bits()), "Mismatch on line {}, expected:\n\t{}\n Got:\n\t{}", line_number, line, emulator.cpu);
+                assert_eq!(
+                    (pc, a, p),
+                    (
+                        emulator.cpu.pc,
+                        emulator.cpu.a.into(),
+                        emulator.cpu.p.bits()
+                    ),
+                    "Mismatch on line {}, expected:\n\t{}\n Got:\n\t{}",
+                    line_number,
+                    line,
+                    emulator.cpu
+                );
                 let (opcode, cycles) = emulator.step();
                 assert_eq!(
                     ref_opcode,
