@@ -1797,10 +1797,11 @@ impl CPU {
     }
 
     fn instr_break<T: MemoryBus>(&mut self, memory: &mut T) -> Option<u8> {
-        let pc_value = self.pc + 2;
+        let pc_value = self.pc.wrapping_add(1);
         // When we get an IRQ we push the current PC and processor flags to the stack.
-        self.sp.push_byte(memory, (pc_value >> 8) as u8);
-        self.sp.push_byte(memory, (pc_value & 0xFF) as u8);
+        let [low, high] = pc_value.to_le_bytes();
+        self.sp.push_byte(memory, high);
+        self.sp.push_byte(memory, low);
 
         // The break flag must be set on the flags that are pushed to the stack, not the flags in the CPU
         let mut current_flag = self.p.clone();
