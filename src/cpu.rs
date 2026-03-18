@@ -95,11 +95,12 @@ pub enum Instruction {
     LDA,
     LDX,
     LDY,
-    LAX, // undocumented opcode
+    LAX, // undocumented opcode, loads into both A and X
     // Store
     STA,
     STX,
     STY,
+    SAX, // undocumented opcode, store the result of (A & X)
     // Transfer
     TAX,
     TAY,
@@ -328,6 +329,9 @@ impl CPU {
             Instruction::STA => self.instr_store(memory, Register::A, operand.unwrap()),
             Instruction::STX => self.instr_store(memory, Register::X, operand.unwrap()),
             Instruction::STY => self.instr_store(memory, Register::Y, operand.unwrap()),
+            Instruction::SAX => {
+                self.instr_store_and(memory, Register::A, Register::X, operand.unwrap())
+            }
             Instruction::TAX => self.instr_transfer(Register::A, Register::X),
             Instruction::TAY => self.instr_transfer(Register::A, Register::Y),
             Instruction::TXA => self.instr_transfer(Register::X, Register::A),
@@ -849,6 +853,30 @@ impl CPU {
             0x8C => Some(OpCode {
                 instr: Instruction::STY,
                 mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x83 => Some(OpCode {
+                instr: Instruction::SAX,
+                mode: AddressingMode::IndX,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0x87 => Some(OpCode {
+                instr: Instruction::SAX,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0x8F => Some(OpCode {
+                instr: Instruction::SAX,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0x97 => Some(OpCode {
+                instr: Instruction::SAX,
+                mode: AddressingMode::ZpY,
                 value: opcode,
                 base_cycle: 4,
             }),
@@ -1769,6 +1797,24 @@ impl CPU {
             Operand::Memory(addr, _) => {
                 let value = self.get_register(register);
                 memory.write_byte(addr, value);
+            }
+            _ => panic!("Unsupported operand {operand:?} for this instruction"),
+        }
+        None
+    }
+
+    fn instr_store_and<T: MemoryBus>(
+        &mut self,
+        memory: &mut T,
+        register1: Register,
+        register2: Register,
+        operand: Operand,
+    ) -> Option<u8> {
+        match operand {
+            Operand::Memory(addr, _) => {
+                let value1 = self.get_register(register1);
+                let value2 = self.get_register(register2);
+                memory.write_byte(addr, value1 & value2);
             }
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         }
