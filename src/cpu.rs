@@ -91,6 +91,7 @@ pub enum Instruction {
     DEX,
     INY,
     DEY,
+    ISB, // undocumented opcode, performs INC + SBC
     // Load
     LDA,
     LDX,
@@ -283,6 +284,10 @@ impl CPU {
             Instruction::ADC => self.instr_adc(memory, operand.unwrap()),
             Instruction::SBC => self.instr_sbc(memory, operand.unwrap()),
             Instruction::INC => self.instr_inc(memory, operand.unwrap()),
+            Instruction::ISB => {
+                self.instr_inc(memory, operand.unwrap());
+                self.instr_sbc(memory, operand.unwrap())
+            }
             Instruction::DEC => self.instr_dec(memory, operand.unwrap()),
             Instruction::INX => self.generic_register_arithmetic(Register::X, ArithmeticOp::Inc),
             Instruction::DEX => self.generic_register_arithmetic(Register::X, ArithmeticOp::Dec),
@@ -511,6 +516,50 @@ impl CPU {
                 base_cycle: 2,
             }),
             // --- END SECTION INC ---
+            // --- BEGIN SECTION ISB ---
+            0xE7 => Some(OpCode {
+                instr: Instruction::ISB,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0xF7 => Some(OpCode {
+                instr: Instruction::ISB,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xEF => Some(OpCode {
+                instr: Instruction::ISB,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xFF => Some(OpCode {
+                instr: Instruction::ISB,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xFB => Some(OpCode {
+                instr: Instruction::ISB,
+                mode: AddressingMode::AbsY,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xE3 => Some(OpCode {
+                instr: Instruction::ISB,
+                mode: AddressingMode::IndX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0xF3 => Some(OpCode {
+                instr: Instruction::ISB,
+                mode: AddressingMode::IndY,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            // --- END SECTION SBC ---
             // --- BEGIN SECTION DEC ---
             0xC6 => Some(OpCode {
                 instr: Instruction::DEC,
