@@ -58,7 +58,16 @@ pub struct CPU {
 
 impl fmt::Display for CPU {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "PC:{:04X} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}", self.pc, self.a, self.x, self.y, self.p.bits(), self.sp.value)
+        write!(
+            f,
+            "PC:{:04X} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
+            self.pc,
+            self.a,
+            self.x,
+            self.y,
+            self.p.bits(),
+            self.sp.value
+        )
     }
 }
 
@@ -86,6 +95,7 @@ pub enum Instruction {
     LDA,
     LDX,
     LDY,
+    LAX, // undocumented opcode
     // Store
     STA,
     STX,
@@ -263,7 +273,9 @@ impl CPU {
         let value = self.fetch_byte(memory);
 
         // Decode it
-        let opcode = self.decode(value).expect("Unknown opcode");
+        let opcode = self.decode(value).unwrap_or_else(|| {
+            panic!("Unknown opcode {:02X}", value);
+        });
         let operand = self.resolve_operand(memory, opcode.mode);
 
         let extra_cycles = match opcode.instr {
@@ -307,9 +319,12 @@ impl CPU {
             Instruction::BVS => {
                 self.generic_instr_branch(operand.unwrap(), self.p.contains(StatusRegister::V))
             }
-            Instruction::LDA => self.instr_load(memory, Register::A, operand.unwrap()),
-            Instruction::LDX => self.instr_load(memory, Register::X, operand.unwrap()),
-            Instruction::LDY => self.instr_load(memory, Register::Y, operand.unwrap()),
+            Instruction::LDA => self.instr_load(memory, vec![Register::A], operand.unwrap()),
+            Instruction::LDX => self.instr_load(memory, vec![Register::X], operand.unwrap()),
+            Instruction::LDY => self.instr_load(memory, vec![Register::Y], operand.unwrap()),
+            Instruction::LAX => {
+                self.instr_load(memory, vec![Register::A, Register::X], operand.unwrap())
+            }
             Instruction::STA => self.instr_store(memory, Register::A, operand.unwrap()),
             Instruction::STX => self.instr_store(memory, Register::X, operand.unwrap()),
             Instruction::STY => self.instr_store(memory, Register::Y, operand.unwrap()),
@@ -718,6 +733,42 @@ impl CPU {
             0xBC => Some(OpCode {
                 instr: Instruction::LDY,
                 mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xA3 => Some(OpCode {
+                instr: Instruction::LAX,
+                mode: AddressingMode::IndX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0xA7 => Some(OpCode {
+                instr: Instruction::LAX,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 3,
+            }),
+            0xAF => Some(OpCode {
+                instr: Instruction::LAX,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xB3 => Some(OpCode {
+                instr: Instruction::LAX,
+                mode: AddressingMode::IndY,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0xB7 => Some(OpCode {
+                instr: Instruction::LAX,
+                mode: AddressingMode::ZpY,
+                value: opcode,
+                base_cycle: 4,
+            }),
+            0xBF => Some(OpCode {
+                instr: Instruction::LAX,
+                mode: AddressingMode::AbsY,
                 value: opcode,
                 base_cycle: 4,
             }),
@@ -1727,7 +1778,7 @@ impl CPU {
     fn instr_load<T: MemoryBus>(
         &mut self,
         memory: &T,
-        register: Register,
+        registers: Vec<Register>,
         operand: Operand,
     ) -> Option<u8> {
         let value = match operand {
@@ -1736,8 +1787,10 @@ impl CPU {
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
-        let reg = self.get_register_mut(register);
-        *reg = value;
+        for register in registers {
+            let reg = self.get_register_mut(register);
+            *reg = value;
+        }
 
         self.p.update_negative_flag(value);
         self.p.update_zero_flag(value);
