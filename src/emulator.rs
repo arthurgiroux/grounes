@@ -51,8 +51,8 @@ mod tests {
     use super::*;
     use regex::Regex;
     use std::fs::File;
-    use std::path::Path;
     use std::io::{BufRead, BufReader};
+    use std::path::Path;
 
     #[test]
     fn nestest_comparison() {
