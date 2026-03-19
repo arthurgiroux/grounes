@@ -95,6 +95,7 @@ pub enum Instruction {
     DCP, // undocumented opcode, performs DEC + CMP
     SLO, // undocumented opcode, performs ASL + ORA
     RLA, // undocumented opcode, performs ROL + AND
+    SRE, // undocumented opcode, performs LSR + EOR
     // Load
     LDA,
     LDX,
@@ -306,6 +307,10 @@ impl CPU {
             Instruction::SLO => {
                 self.instr_asl(memory, operand.unwrap());
                 self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::Or)
+            }
+            Instruction::SRE => {
+                self.instr_lsr(memory, operand.unwrap());
+                self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::Xor)
             }
             Instruction::BIT => self.instr_bit(memory, operand.unwrap()),
             Instruction::ASL => self.instr_asl(memory, operand.unwrap()),
@@ -733,6 +738,50 @@ impl CPU {
                 base_cycle: 5,
             }),
             // --- END SECTION SLO ---
+            // --- BEGIN SECTION SRE ---
+            0x47 => Some(OpCode {
+                instr: Instruction::SRE,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            0x57 => Some(OpCode {
+                instr: Instruction::SRE,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x4F => Some(OpCode {
+                instr: Instruction::SRE,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x5B => Some(OpCode {
+                instr: Instruction::SRE,
+                mode: AddressingMode::AbsY,
+                value: opcode,
+                base_cycle: 7,
+            }),
+            0x5F => Some(OpCode {
+                instr: Instruction::SRE,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 7,
+            }),
+            0x43 => Some(OpCode {
+                instr: Instruction::SRE,
+                mode: AddressingMode::IndX,
+                value: opcode,
+                base_cycle: 8,
+            }),
+            0x53 => Some(OpCode {
+                instr: Instruction::SRE,
+                mode: AddressingMode::IndY,
+                value: opcode,
+                base_cycle: 8,
+            }),
+            // --- END SECTION SRE ---
             // --- BEGIN BRANCH INSTRUCTIONS ---
             0x90 => Some(OpCode {
                 instr: Instruction::BCC,
