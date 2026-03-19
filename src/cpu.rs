@@ -216,7 +216,7 @@ fn is_page_crossed(base_addr: u16, incremented_addr: u16) -> bool {
 
 #[derive(Debug)]
 pub struct StackPointer {
-    value: u8,
+    pub value: u8,
 }
 
 /// An "Empty Descending" stack pointer.
@@ -262,8 +262,7 @@ impl CPU {
 
     pub fn power_up<T: MemoryBus>(&mut self, memory: &T) {
         // Reference value: https://www.nesdev.org/wiki/CPU_power_up_state
-        //self.pc = u16::from_le_bytes([memory.read_byte(0xFFFC), memory.read_byte(0xFFFD)]);
-        self.pc = 0xC000;
+        self.pc = u16::from_le_bytes([memory.read_byte(0xFFFC), memory.read_byte(0xFFFD)]);
     }
 
     /// Step the CPU: fetch the next instruction and execute it
@@ -274,7 +273,6 @@ impl CPU {
         if let Some(value) = self.pending_interrupt_flag_change {
             self.p.set(StatusRegister::I, value);
         }
-        let pc = self.pc;
 
         // Fetch the next instruction
         let value = self.fetch_byte(memory);

@@ -6,7 +6,7 @@ use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
 pub struct Emulator {
-    cpu: CPU,
+    pub cpu: CPU,
     ram: RAM,
     mapper: Option<Box<dyn Mapper>>,
 }
@@ -43,6 +43,10 @@ impl Emulator {
         };
         self.cpu.step(&mut view)
     }
+
+    pub fn set_pc(&mut self, value: u16) {
+        self.cpu.pc = value;
+    }
 }
 
 #[cfg(test)]
@@ -59,6 +63,8 @@ mod tests {
         let mut emulator = Emulator::new();
         emulator.load_rom("data/nestest.nes").unwrap();
         emulator.power_up();
+        emulator.set_pc(0xC000);
+        let mut elapsed_cycles = 7;
 
         let mut line_number = 0;
         // We are going to compare line by line the result of the CPU
@@ -80,23 +86,57 @@ mod tests {
                 let x = u8::from_str_radix(&caps[5], 16).unwrap(); // "00"
                 let y = u8::from_str_radix(&caps[6], 16).unwrap(); // "00"
                 let p = u8::from_str_radix(&caps[7], 16).unwrap(); // "24"
-                let sp = &caps[8]; // "FD"
+                let sp = u8::from_str_radix(&caps[8], 16).unwrap(); // "FD"
                 let ppu_dot = &caps[9]; // "0"
                 let ppu_cyc = &caps[10]; // "21"
-                let cyc = &caps[11]; // "7"
+                let cyc = u32::from_str_radix(&caps[11], 10).unwrap(); // "7"
 
                 assert_eq!(
-                    (pc, a, p),
-                    (
-                        emulator.cpu.pc,
-                        emulator.cpu.a.into(),
-                        emulator.cpu.p.bits()
-                    ),
-                    "Mismatch on line {}, expected:\n\t{}\n Got:\n\t{}",
-                    line_number,
-                    line,
-                    emulator.cpu
+                    pc, emulator.cpu.pc,
+                    "PC mismatch on line {}, expected:{:2X} Got:{:2X}\n\t{}",
+                    line_number, pc, emulator.cpu.pc, emulator.cpu,
                 );
+
+                assert_eq!(
+                    a, emulator.cpu.a,
+                    "Register 'a' mismatch on line {}, expected:{:2X} Got:{:2X}\n\t{}",
+                    line_number, a, emulator.cpu.a, emulator.cpu,
+                );
+
+                assert_eq!(
+                    x, emulator.cpu.x,
+                    "Register 'x' mismatch on line {}, expected:{:2X} Got:{:2X}\n\t{}",
+                    line_number, x, emulator.cpu.x, emulator.cpu,
+                );
+
+                assert_eq!(
+                    y, emulator.cpu.y,
+                    "Register 'y' mismatch on line {}, expected:{:2X} Got:{:2X}\n\t{}",
+                    line_number, y, emulator.cpu.y, emulator.cpu,
+                );
+
+                assert_eq!(
+                    p,
+                    emulator.cpu.p.bits(),
+                    "Register 'p' mismatch on line {}, expected:{:2X} Got:{:2X}\n\t{}",
+                    line_number,
+                    p,
+                    emulator.cpu.p.bits(),
+                    emulator.cpu,
+                );
+
+                assert_eq!(
+                    sp, emulator.cpu.sp.value,
+                    "Stack pointer mismatch on line {}, expected:{:2X} Got:{:2X}\n\t{}",
+                    line_number, sp, emulator.cpu.sp.value, emulator.cpu,
+                );
+
+                assert_eq!(
+                    cyc, elapsed_cycles,
+                    "Cycle mismatch on line {}, expected:{:} Got:{:}\n\t{}",
+                    line_number, cyc, elapsed_cycles, emulator.cpu,
+                );
+
                 let (opcode, cycles) = emulator.step();
                 assert_eq!(
                     ref_opcode,
@@ -106,6 +146,7 @@ mod tests {
                     opcode,
                     ref_opcode
                 );
+                elapsed_cycles += cycles as u32;
                 line_number += 1;
             }
             println!("{}", line);
