@@ -223,19 +223,32 @@ pub enum Instruction {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AddressingMode {
-    Imp,
-    Acc,
-    Imm,
-    Zp,
-    ZpX,
-    ZpY,
-    Abs,
-    AbsX,
-    AbsY,
-    Ind,
-    Rel,
-    IndX,
-    IndY,
+    /// Some instructions have no address operand, the destination of results are implied.
+    Implicit,
+    /// Many instructions can operate on the accumulator a.
+    Accumulator,
+    /// Uses the 8-bit operand itself as the value for the operation, rather than fetching a value from a memory address.
+    Immediate,
+    /// Branch instructions have a relative addressing mode that specifies an 8-bit signed offset relative to the current PC.
+    Relative,
+    /// Fetches the value from an 8-bit address on the zero page.
+    ZeroPage,
+    /// Fetches the value from an 8-bit address (offsetted by X) on the zero page.
+    ZeroPageX,
+    /// Fetches the value from an 8-bit address (offsetted by Y) on the zero page.
+    ZeroPageY,
+    /// Fetches the value from a 16-bit address anywhere in memory.
+    Absolute,
+    /// Fetches the value from a 16-bit address (offsetted by X) anywhere in memory.
+    AbsoluteX,
+    /// Fetches the value from a 16-bit address (offsetted by Y) anywhere in memory.
+    AbsoluteY,
+    /// The JMP instruction has a special indirect addressing mode that can jump to the address stored in a 16-bit pointer anywhere in memory.
+    Indirect,
+    /// Indexed indirect: Adds X to a base address before fetching a pointer, then read the address
+    IndirectX,
+    /// Indirect Indexed: Fetches the pointer then adds Y and read the address there
+    IndirectY,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -476,49 +489,49 @@ impl CPU {
             // --- BEGIN SECTION ADC ---
             0x69 => Some(OpCode {
                 instr: Instruction::ADC,
-                mode: AddressingMode::Imm,
+                mode: AddressingMode::Immediate,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x65 => Some(OpCode {
                 instr: Instruction::ADC,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0x75 => Some(OpCode {
                 instr: Instruction::ADC,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x6D => Some(OpCode {
                 instr: Instruction::ADC,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x7D => Some(OpCode {
                 instr: Instruction::ADC,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x79 => Some(OpCode {
                 instr: Instruction::ADC,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x61 => Some(OpCode {
                 instr: Instruction::ADC,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x71 => Some(OpCode {
                 instr: Instruction::ADC,
-                mode: AddressingMode::IndY,
+                mode: AddressingMode::IndirectY,
                 value: opcode,
                 base_cycle: 5,
             }),
@@ -526,49 +539,49 @@ impl CPU {
             // --- BEGIN SECTION SBC ---
             0xE9 | 0xEB => Some(OpCode {
                 instr: Instruction::SBC,
-                mode: AddressingMode::Imm,
+                mode: AddressingMode::Immediate,
                 value: opcode,
                 base_cycle: 2,
             }),
             0xE5 => Some(OpCode {
                 instr: Instruction::SBC,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0xF5 => Some(OpCode {
                 instr: Instruction::SBC,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xED => Some(OpCode {
                 instr: Instruction::SBC,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xFD => Some(OpCode {
                 instr: Instruction::SBC,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xF9 => Some(OpCode {
                 instr: Instruction::SBC,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xE1 => Some(OpCode {
                 instr: Instruction::SBC,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0xF1 => Some(OpCode {
                 instr: Instruction::SBC,
-                mode: AddressingMode::IndY,
+                mode: AddressingMode::IndirectY,
                 value: opcode,
                 base_cycle: 5,
             }),
@@ -576,37 +589,37 @@ impl CPU {
             // --- BEGIN SECTION INC ---
             0xE6 => Some(OpCode {
                 instr: Instruction::INC,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 5,
             }),
             0xF6 => Some(OpCode {
                 instr: Instruction::INC,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0xEE => Some(OpCode {
                 instr: Instruction::INC,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 6,
             }),
             0xFE => Some(OpCode {
                 instr: Instruction::INC,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 7,
             }),
             0xE8 => Some(OpCode {
                 instr: Instruction::INX,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
             0xC8 => Some(OpCode {
                 instr: Instruction::INY,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
@@ -614,43 +627,43 @@ impl CPU {
             // --- BEGIN SECTION ISB ---
             0xE7 => Some(OpCode {
                 instr: Instruction::ISB,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 5,
             }),
             0xF7 => Some(OpCode {
                 instr: Instruction::ISB,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0xEF => Some(OpCode {
                 instr: Instruction::ISB,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 6,
             }),
             0xFF => Some(OpCode {
                 instr: Instruction::ISB,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 7,
             }),
             0xFB => Some(OpCode {
                 instr: Instruction::ISB,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 7,
             }),
             0xE3 => Some(OpCode {
                 instr: Instruction::ISB,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 8,
             }),
             0xF3 => Some(OpCode {
                 instr: Instruction::ISB,
-                mode: AddressingMode::IndY,
+                mode: AddressingMode::IndirectY,
                 value: opcode,
                 base_cycle: 8,
             }),
@@ -658,37 +671,37 @@ impl CPU {
             // --- BEGIN SECTION DEC ---
             0xC6 => Some(OpCode {
                 instr: Instruction::DEC,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 5,
             }),
             0xD6 => Some(OpCode {
                 instr: Instruction::DEC,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0xCE => Some(OpCode {
                 instr: Instruction::DEC,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 6,
             }),
             0xDE => Some(OpCode {
                 instr: Instruction::DEC,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 7,
             }),
             0xCA => Some(OpCode {
                 instr: Instruction::DEX,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x88 => Some(OpCode {
                 instr: Instruction::DEY,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
@@ -696,43 +709,43 @@ impl CPU {
             // --- BEGIN SECTION DCP ---
             0xC7 => Some(OpCode {
                 instr: Instruction::DCP,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 5,
             }),
             0xD7 => Some(OpCode {
                 instr: Instruction::DCP,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0xCF => Some(OpCode {
                 instr: Instruction::DCP,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 6,
             }),
             0xDF => Some(OpCode {
                 instr: Instruction::DCP,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 7,
             }),
             0xDB => Some(OpCode {
                 instr: Instruction::DCP,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 7,
             }),
             0xC3 => Some(OpCode {
                 instr: Instruction::DCP,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 8,
             }),
             0xD3 => Some(OpCode {
                 instr: Instruction::DCP,
-                mode: AddressingMode::IndY,
+                mode: AddressingMode::IndirectY,
                 value: opcode,
                 base_cycle: 8,
             }),
@@ -740,31 +753,31 @@ impl CPU {
             // --- BEGIN SECTION ASL ---
             0x0A => Some(OpCode {
                 instr: Instruction::ASL,
-                mode: AddressingMode::Acc,
+                mode: AddressingMode::Accumulator,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x06 => Some(OpCode {
                 instr: Instruction::ASL,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 5,
             }),
             0x16 => Some(OpCode {
                 instr: Instruction::ASL,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x0E => Some(OpCode {
                 instr: Instruction::ASL,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x1E => Some(OpCode {
                 instr: Instruction::ASL,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 7,
             }),
@@ -772,43 +785,43 @@ impl CPU {
             // --- BEGIN SECTION SLO ---
             0x07 => Some(OpCode {
                 instr: Instruction::SLO,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 5,
             }),
             0x17 => Some(OpCode {
                 instr: Instruction::SLO,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x0F => Some(OpCode {
                 instr: Instruction::SLO,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x1F => Some(OpCode {
                 instr: Instruction::SLO,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 7,
             }),
             0x1B => Some(OpCode {
                 instr: Instruction::SLO,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 7,
             }),
             0x03 => Some(OpCode {
                 instr: Instruction::SLO,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 8,
             }),
             0x13 => Some(OpCode {
                 instr: Instruction::SLO,
-                mode: AddressingMode::IndY,
+                mode: AddressingMode::IndirectY,
                 value: opcode,
                 base_cycle: 8,
             }),
@@ -816,43 +829,43 @@ impl CPU {
             // --- BEGIN SECTION SRE ---
             0x47 => Some(OpCode {
                 instr: Instruction::SRE,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 5,
             }),
             0x57 => Some(OpCode {
                 instr: Instruction::SRE,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x4F => Some(OpCode {
                 instr: Instruction::SRE,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x5B => Some(OpCode {
                 instr: Instruction::SRE,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 7,
             }),
             0x5F => Some(OpCode {
                 instr: Instruction::SRE,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 7,
             }),
             0x43 => Some(OpCode {
                 instr: Instruction::SRE,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 8,
             }),
             0x53 => Some(OpCode {
                 instr: Instruction::SRE,
-                mode: AddressingMode::IndY,
+                mode: AddressingMode::IndirectY,
                 value: opcode,
                 base_cycle: 8,
             }),
@@ -860,43 +873,43 @@ impl CPU {
             // --- BEGIN SECTION RRA ---
             0x67 => Some(OpCode {
                 instr: Instruction::RRA,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 5,
             }),
             0x77 => Some(OpCode {
                 instr: Instruction::RRA,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x6F => Some(OpCode {
                 instr: Instruction::RRA,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x7B => Some(OpCode {
                 instr: Instruction::RRA,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 7,
             }),
             0x7F => Some(OpCode {
                 instr: Instruction::RRA,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 7,
             }),
             0x63 => Some(OpCode {
                 instr: Instruction::RRA,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 8,
             }),
             0x73 => Some(OpCode {
                 instr: Instruction::RRA,
-                mode: AddressingMode::IndY,
+                mode: AddressingMode::IndirectY,
                 value: opcode,
                 base_cycle: 8,
             }),
@@ -904,49 +917,49 @@ impl CPU {
             // --- BEGIN BRANCH INSTRUCTIONS ---
             0x90 => Some(OpCode {
                 instr: Instruction::BCC,
-                mode: AddressingMode::Rel,
+                mode: AddressingMode::Relative,
                 value: opcode,
                 base_cycle: 2,
             }),
             0xB0 => Some(OpCode {
                 instr: Instruction::BCS,
-                mode: AddressingMode::Rel,
+                mode: AddressingMode::Relative,
                 value: opcode,
                 base_cycle: 2,
             }),
             0xF0 => Some(OpCode {
                 instr: Instruction::BEQ,
-                mode: AddressingMode::Rel,
+                mode: AddressingMode::Relative,
                 value: opcode,
                 base_cycle: 2,
             }),
             0xD0 => Some(OpCode {
                 instr: Instruction::BNE,
-                mode: AddressingMode::Rel,
+                mode: AddressingMode::Relative,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x10 => Some(OpCode {
                 instr: Instruction::BPL,
-                mode: AddressingMode::Rel,
+                mode: AddressingMode::Relative,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x30 => Some(OpCode {
                 instr: Instruction::BMI,
-                mode: AddressingMode::Rel,
+                mode: AddressingMode::Relative,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x50 => Some(OpCode {
                 instr: Instruction::BVC,
-                mode: AddressingMode::Rel,
+                mode: AddressingMode::Relative,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x70 => Some(OpCode {
                 instr: Instruction::BVS,
-                mode: AddressingMode::Rel,
+                mode: AddressingMode::Relative,
                 value: opcode,
                 base_cycle: 2,
             }),
@@ -954,145 +967,145 @@ impl CPU {
             // --- BEGIN SECTION LOAD ---
             0xA9 => Some(OpCode {
                 instr: Instruction::LDA,
-                mode: AddressingMode::Imm,
+                mode: AddressingMode::Immediate,
                 value: opcode,
                 base_cycle: 2,
             }),
             0xA5 => Some(OpCode {
                 instr: Instruction::LDA,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0xB5 => Some(OpCode {
                 instr: Instruction::LDA,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xAD => Some(OpCode {
                 instr: Instruction::LDA,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xBD => Some(OpCode {
                 instr: Instruction::LDA,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xB9 => Some(OpCode {
                 instr: Instruction::LDA,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xA1 => Some(OpCode {
                 instr: Instruction::LDA,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0xB1 => Some(OpCode {
                 instr: Instruction::LDA,
-                mode: AddressingMode::IndY,
+                mode: AddressingMode::IndirectY,
                 value: opcode,
                 base_cycle: 5,
             }),
             0xA2 => Some(OpCode {
                 instr: Instruction::LDX,
-                mode: AddressingMode::Imm,
+                mode: AddressingMode::Immediate,
                 value: opcode,
                 base_cycle: 2,
             }),
             0xA6 => Some(OpCode {
                 instr: Instruction::LDX,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0xB6 => Some(OpCode {
                 instr: Instruction::LDX,
-                mode: AddressingMode::ZpY,
+                mode: AddressingMode::ZeroPageY,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xAE => Some(OpCode {
                 instr: Instruction::LDX,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xBE => Some(OpCode {
                 instr: Instruction::LDX,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xA0 => Some(OpCode {
                 instr: Instruction::LDY,
-                mode: AddressingMode::Imm,
+                mode: AddressingMode::Immediate,
                 value: opcode,
                 base_cycle: 2,
             }),
             0xA4 => Some(OpCode {
                 instr: Instruction::LDY,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0xB4 => Some(OpCode {
                 instr: Instruction::LDY,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xAC => Some(OpCode {
                 instr: Instruction::LDY,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xBC => Some(OpCode {
                 instr: Instruction::LDY,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xA3 => Some(OpCode {
                 instr: Instruction::LAX,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0xA7 => Some(OpCode {
                 instr: Instruction::LAX,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0xAF => Some(OpCode {
                 instr: Instruction::LAX,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xB3 => Some(OpCode {
                 instr: Instruction::LAX,
-                mode: AddressingMode::IndY,
+                mode: AddressingMode::IndirectY,
                 value: opcode,
                 base_cycle: 5,
             }),
             0xB7 => Some(OpCode {
                 instr: Instruction::LAX,
-                mode: AddressingMode::ZpY,
+                mode: AddressingMode::ZeroPageY,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xBF => Some(OpCode {
                 instr: Instruction::LAX,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 4,
             }),
@@ -1100,103 +1113,103 @@ impl CPU {
             // --- BEGIN SECTION STORE ---
             0x85 => Some(OpCode {
                 instr: Instruction::STA,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0x95 => Some(OpCode {
                 instr: Instruction::STA,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x8D => Some(OpCode {
                 instr: Instruction::STA,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x9D => Some(OpCode {
                 instr: Instruction::STA,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 5,
             }),
             0x99 => Some(OpCode {
                 instr: Instruction::STA,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 5,
             }),
             0x81 => Some(OpCode {
                 instr: Instruction::STA,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x91 => Some(OpCode {
                 instr: Instruction::STA,
-                mode: AddressingMode::IndY,
+                mode: AddressingMode::IndirectY,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x86 => Some(OpCode {
                 instr: Instruction::STX,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0x96 => Some(OpCode {
                 instr: Instruction::STX,
-                mode: AddressingMode::ZpY,
+                mode: AddressingMode::ZeroPageY,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x8E => Some(OpCode {
                 instr: Instruction::STX,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x84 => Some(OpCode {
                 instr: Instruction::STY,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0x94 => Some(OpCode {
                 instr: Instruction::STY,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x8C => Some(OpCode {
                 instr: Instruction::STY,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x83 => Some(OpCode {
                 instr: Instruction::SAX,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x87 => Some(OpCode {
                 instr: Instruction::SAX,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0x8F => Some(OpCode {
                 instr: Instruction::SAX,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x97 => Some(OpCode {
                 instr: Instruction::SAX,
-                mode: AddressingMode::ZpY,
+                mode: AddressingMode::ZeroPageY,
                 value: opcode,
                 base_cycle: 4,
             }),
@@ -1204,25 +1217,25 @@ impl CPU {
             // --- BEGIN SECTION TRANSFER ---
             0xAA => Some(OpCode {
                 instr: Instruction::TAX,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
             0xA8 => Some(OpCode {
                 instr: Instruction::TAY,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x8A => Some(OpCode {
                 instr: Instruction::TXA,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x98 => Some(OpCode {
                 instr: Instruction::TYA,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
@@ -1230,31 +1243,31 @@ impl CPU {
             // --- BEGIN SECTION LSR ---
             0x4A => Some(OpCode {
                 instr: Instruction::LSR,
-                mode: AddressingMode::Acc,
+                mode: AddressingMode::Accumulator,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x46 => Some(OpCode {
                 instr: Instruction::LSR,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 5,
             }),
             0x56 => Some(OpCode {
                 instr: Instruction::LSR,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x4E => Some(OpCode {
                 instr: Instruction::LSR,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x5E => Some(OpCode {
                 instr: Instruction::LSR,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 7,
             }),
@@ -1262,31 +1275,31 @@ impl CPU {
             // --- BEGIN SECTION ROL ---
             0x2A => Some(OpCode {
                 instr: Instruction::ROL,
-                mode: AddressingMode::Acc,
+                mode: AddressingMode::Accumulator,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x26 => Some(OpCode {
                 instr: Instruction::ROL,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 5,
             }),
             0x36 => Some(OpCode {
                 instr: Instruction::ROL,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x2E => Some(OpCode {
                 instr: Instruction::ROL,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x3E => Some(OpCode {
                 instr: Instruction::ROL,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 7,
             }),
@@ -1294,43 +1307,43 @@ impl CPU {
             // --- BEGIN SECTION RLA ---
             0x23 => Some(OpCode {
                 instr: Instruction::RLA,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 8,
             }),
             0x33 => Some(OpCode {
                 instr: Instruction::RLA,
-                mode: AddressingMode::IndY,
+                mode: AddressingMode::IndirectY,
                 value: opcode,
                 base_cycle: 8,
             }),
             0x2F => Some(OpCode {
                 instr: Instruction::RLA,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x27 => Some(OpCode {
                 instr: Instruction::RLA,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 5,
             }),
             0x37 => Some(OpCode {
                 instr: Instruction::RLA,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x3B => Some(OpCode {
                 instr: Instruction::RLA,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 7,
             }),
             0x3F => Some(OpCode {
                 instr: Instruction::RLA,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 7,
             }),
@@ -1338,31 +1351,31 @@ impl CPU {
             // --- BEGIN SECTION ROR ---
             0x6A => Some(OpCode {
                 instr: Instruction::ROR,
-                mode: AddressingMode::Acc,
+                mode: AddressingMode::Accumulator,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x66 => Some(OpCode {
                 instr: Instruction::ROR,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 5,
             }),
             0x76 => Some(OpCode {
                 instr: Instruction::ROR,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x6E => Some(OpCode {
                 instr: Instruction::ROR,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x7E => Some(OpCode {
                 instr: Instruction::ROR,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 7,
             }),
@@ -1370,49 +1383,49 @@ impl CPU {
             // --- BEGIN SECTION AND ---
             0x29 => Some(OpCode {
                 instr: Instruction::AND,
-                mode: AddressingMode::Imm,
+                mode: AddressingMode::Immediate,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x25 => Some(OpCode {
                 instr: Instruction::AND,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0x35 => Some(OpCode {
                 instr: Instruction::AND,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x2D => Some(OpCode {
                 instr: Instruction::AND,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x3D => Some(OpCode {
                 instr: Instruction::AND,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x39 => Some(OpCode {
                 instr: Instruction::AND,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x21 => Some(OpCode {
                 instr: Instruction::AND,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x31 => Some(OpCode {
                 instr: Instruction::AND,
-                mode: AddressingMode::IndY,
+                mode: AddressingMode::IndirectY,
                 value: opcode,
                 base_cycle: 5,
             }),
@@ -1420,49 +1433,49 @@ impl CPU {
             // --- BEGIN SECTION ORA ---
             0x09 => Some(OpCode {
                 instr: Instruction::ORA,
-                mode: AddressingMode::Imm,
+                mode: AddressingMode::Immediate,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x05 => Some(OpCode {
                 instr: Instruction::ORA,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0x15 => Some(OpCode {
                 instr: Instruction::ORA,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x0D => Some(OpCode {
                 instr: Instruction::ORA,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x1D => Some(OpCode {
                 instr: Instruction::ORA,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x19 => Some(OpCode {
                 instr: Instruction::ORA,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x01 => Some(OpCode {
                 instr: Instruction::ORA,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x11 => Some(OpCode {
                 instr: Instruction::ORA,
-                mode: AddressingMode::IndY,
+                mode: AddressingMode::IndirectY,
                 value: opcode,
                 base_cycle: 5,
             }),
@@ -1470,49 +1483,49 @@ impl CPU {
             // --- BEGIN SECTION EOR ---
             0x49 => Some(OpCode {
                 instr: Instruction::EOR,
-                mode: AddressingMode::Imm,
+                mode: AddressingMode::Immediate,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x45 => Some(OpCode {
                 instr: Instruction::EOR,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0x55 => Some(OpCode {
                 instr: Instruction::EOR,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x4D => Some(OpCode {
                 instr: Instruction::EOR,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x5D => Some(OpCode {
                 instr: Instruction::EOR,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x59 => Some(OpCode {
                 instr: Instruction::EOR,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x41 => Some(OpCode {
                 instr: Instruction::EOR,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0x51 => Some(OpCode {
                 instr: Instruction::EOR,
-                mode: AddressingMode::IndY,
+                mode: AddressingMode::IndirectY,
                 value: opcode,
                 base_cycle: 5,
             }),
@@ -1520,13 +1533,13 @@ impl CPU {
             // --- BEGIN SECTION BIT ---
             0x24 => Some(OpCode {
                 instr: Instruction::BIT,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0x2C => Some(OpCode {
                 instr: Instruction::BIT,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
@@ -1534,49 +1547,49 @@ impl CPU {
             // --- BEGIN SECTION CMP ---
             0xC9 => Some(OpCode {
                 instr: Instruction::CMP,
-                mode: AddressingMode::Imm,
+                mode: AddressingMode::Immediate,
                 value: opcode,
                 base_cycle: 2,
             }),
             0xC5 => Some(OpCode {
                 instr: Instruction::CMP,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0xD5 => Some(OpCode {
                 instr: Instruction::CMP,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xCD => Some(OpCode {
                 instr: Instruction::CMP,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xDD => Some(OpCode {
                 instr: Instruction::CMP,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xD9 => Some(OpCode {
                 instr: Instruction::CMP,
-                mode: AddressingMode::AbsY,
+                mode: AddressingMode::AbsoluteY,
                 value: opcode,
                 base_cycle: 4,
             }),
             0xC1 => Some(OpCode {
                 instr: Instruction::CMP,
-                mode: AddressingMode::IndX,
+                mode: AddressingMode::IndirectX,
                 value: opcode,
                 base_cycle: 6,
             }),
             0xD1 => Some(OpCode {
                 instr: Instruction::CMP,
-                mode: AddressingMode::IndY,
+                mode: AddressingMode::IndirectY,
                 value: opcode,
                 base_cycle: 5,
             }),
@@ -1584,19 +1597,19 @@ impl CPU {
             // --- BEGIN SECTION CPX ---
             0xE0 => Some(OpCode {
                 instr: Instruction::CPX,
-                mode: AddressingMode::Imm,
+                mode: AddressingMode::Immediate,
                 value: opcode,
                 base_cycle: 2,
             }),
             0xE4 => Some(OpCode {
                 instr: Instruction::CPX,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0xEC => Some(OpCode {
                 instr: Instruction::CPX,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
@@ -1604,19 +1617,19 @@ impl CPU {
             // --- BEGIN SECTION CPY ---
             0xC0 => Some(OpCode {
                 instr: Instruction::CPY,
-                mode: AddressingMode::Imm,
+                mode: AddressingMode::Immediate,
                 value: opcode,
                 base_cycle: 2,
             }),
             0xC4 => Some(OpCode {
                 instr: Instruction::CPY,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0xCC => Some(OpCode {
                 instr: Instruction::CPY,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
@@ -1624,13 +1637,13 @@ impl CPU {
             // --- BEGIN SECTION JMP ---
             0x4C => Some(OpCode {
                 instr: Instruction::JMP,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 3,
             }),
             0x6C => Some(OpCode {
                 instr: Instruction::JMP,
-                mode: AddressingMode::Ind,
+                mode: AddressingMode::Indirect,
                 value: opcode,
                 base_cycle: 5,
             }),
@@ -1638,7 +1651,7 @@ impl CPU {
             // --- BEGIN SECTION JSR ---
             0x20 => Some(OpCode {
                 instr: Instruction::JSR,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 6,
             }),
@@ -1646,7 +1659,7 @@ impl CPU {
             // --- BEGIN SECTION JSR ---
             0x60 => Some(OpCode {
                 instr: Instruction::RTS,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 6,
             }),
@@ -1654,7 +1667,7 @@ impl CPU {
             // --- BEGIN SECTION BRK ---
             0x00 => Some(OpCode {
                 instr: Instruction::BRK,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 7,
             }),
@@ -1662,7 +1675,7 @@ impl CPU {
             // --- BEGIN SECTION RTI ---
             0x40 => Some(OpCode {
                 instr: Instruction::RTI,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 6,
             }),
@@ -1670,25 +1683,25 @@ impl CPU {
             // --- BEGIN SECTION PH/PL ---
             0x48 => Some(OpCode {
                 instr: Instruction::PHA,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 3,
             }),
             0x08 => Some(OpCode {
                 instr: Instruction::PHP,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 3,
             }),
             0x68 => Some(OpCode {
                 instr: Instruction::PLA,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x28 => Some(OpCode {
                 instr: Instruction::PLP,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 4,
             }),
@@ -1696,13 +1709,13 @@ impl CPU {
             // --- END SECTION TXS/TSX ---
             0xBA => Some(OpCode {
                 instr: Instruction::TSX,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x9A => Some(OpCode {
                 instr: Instruction::TXS,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
@@ -1710,43 +1723,43 @@ impl CPU {
             // --- BEGIN SECTION SET/CLEAR FLAGS ---
             0x18 => Some(OpCode {
                 instr: Instruction::CLC,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
             0xD8 => Some(OpCode {
                 instr: Instruction::CLD,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x58 => Some(OpCode {
                 instr: Instruction::CLI,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
             0xB8 => Some(OpCode {
                 instr: Instruction::CLV,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x38 => Some(OpCode {
                 instr: Instruction::SEC,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
             0xF8 => Some(OpCode {
                 instr: Instruction::SED,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x78 => Some(OpCode {
                 instr: Instruction::SEI,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
@@ -1754,37 +1767,37 @@ impl CPU {
             // --- BEGIN SECTION MISC ---
             0x04 | 0x44 | 0x64 => Some(OpCode {
                 instr: Instruction::NOP,
-                mode: AddressingMode::Zp,
+                mode: AddressingMode::ZeroPage,
                 value: opcode,
                 base_cycle: 3,
             }),
             0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => Some(OpCode {
                 instr: Instruction::NOP,
-                mode: AddressingMode::ZpX,
+                mode: AddressingMode::ZeroPageX,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x0C => Some(OpCode {
                 instr: Instruction::NOP,
-                mode: AddressingMode::Abs,
+                mode: AddressingMode::Absolute,
                 value: opcode,
                 base_cycle: 4,
             }),
             0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xEA | 0xFA => Some(OpCode {
                 instr: Instruction::NOP,
-                mode: AddressingMode::Imp,
+                mode: AddressingMode::Implicit,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x80 => Some(OpCode {
                 instr: Instruction::NOP,
-                mode: AddressingMode::Imm,
+                mode: AddressingMode::Immediate,
                 value: opcode,
                 base_cycle: 2,
             }),
             0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => Some(OpCode {
                 instr: Instruction::NOP,
-                mode: AddressingMode::AbsX,
+                mode: AddressingMode::AbsoluteX,
                 value: opcode,
                 base_cycle: 4,
             }),
@@ -1812,10 +1825,10 @@ impl CPU {
         mode: AddressingMode,
     ) -> Option<Operand> {
         match mode {
-            AddressingMode::Imm => Some(Operand::Immediate(self.fetch_byte(memory))),
-            AddressingMode::Acc => Some(Operand::Accumulator),
-            AddressingMode::Rel => Some(Operand::Relative(self.fetch_byte(memory) as i8)),
-            AddressingMode::Imp => None,
+            AddressingMode::Immediate => Some(Operand::Immediate(self.fetch_byte(memory))),
+            AddressingMode::Accumulator => Some(Operand::Accumulator),
+            AddressingMode::Relative => Some(Operand::Relative(self.fetch_byte(memory) as i8)),
+            AddressingMode::Implicit => None,
             _ => {
                 let (addr, page_crossed) = self.get_operand_address(memory, mode);
                 Some(Operand::Memory(addr, page_crossed))
@@ -1830,35 +1843,35 @@ impl CPU {
     ) -> (u16, bool) {
         match addressing_mode {
             // Fetch a value from the zero-page (0x00FF)
-            AddressingMode::Zp => {
+            AddressingMode::ZeroPage => {
                 let arg = self.fetch_byte(memory);
                 (arg as u16, false)
             }
             // Fetches the value from an 8-bit address with the offset in X on the zero page.
-            AddressingMode::ZpX => {
+            AddressingMode::ZeroPageX => {
                 let arg = self.fetch_byte(memory);
                 (arg.wrapping_add(self.x) as u16, false)
             }
             // Fetches the value from an 8-bit address with the offset in Y on the zero page.
-            AddressingMode::ZpY => {
+            AddressingMode::ZeroPageY => {
                 let arg = self.fetch_byte(memory);
                 (arg.wrapping_add(self.y) as u16, false)
             }
             // Fetches the value from a 16-bit address anywhere in memory.
-            AddressingMode::Abs => (self.fetch_word(memory), false),
+            AddressingMode::Absolute => (self.fetch_word(memory), false),
             // Fetches the value from a 16-bit address with the offset in X.
-            AddressingMode::AbsX => {
+            AddressingMode::AbsoluteX => {
                 let arg = self.fetch_word(memory);
                 let addr = arg.wrapping_add(self.x as u16);
                 (addr, is_page_crossed(arg, addr))
             }
             // Fetches the value from a 16-bit address with the offset in Y.
-            AddressingMode::AbsY => {
+            AddressingMode::AbsoluteY => {
                 let arg = self.fetch_word(memory);
                 let addr = arg.wrapping_add(self.y as u16);
                 (addr, is_page_crossed(arg, addr))
             }
-            AddressingMode::Ind => {
+            AddressingMode::Indirect => {
                 let arg = self.fetch_word(memory);
                 let low = memory.read_byte(arg);
                 // 6502 indirect jump bug:
@@ -1875,7 +1888,7 @@ impl CPU {
                 let addr = u16::from_le_bytes([low, high]);
                 (addr, false)
             }
-            AddressingMode::IndX => {
+            AddressingMode::IndirectX => {
                 let arg = self.fetch_byte(memory);
                 let ptr = arg.wrapping_add(self.x);
                 let low = memory.read_byte(ptr as u16);
@@ -1883,7 +1896,7 @@ impl CPU {
                 let addr = u16::from_le_bytes([low, high]);
                 (addr, false)
             }
-            AddressingMode::IndY => {
+            AddressingMode::IndirectY => {
                 let arg = self.fetch_byte(memory);
                 let low = memory.read_byte(arg as u16);
                 let high = memory.read_byte(arg.wrapping_add(1) as u16);
@@ -2410,7 +2423,7 @@ mod tests {
             cpu.decode(0x69),
             Some(OpCode {
                 instr: Instruction::ADC,
-                mode: AddressingMode::Imm,
+                mode: AddressingMode::Immediate,
                 value: 0x69,
                 base_cycle: 2
             })
@@ -2456,7 +2469,7 @@ mod tests {
         let mut memory = MockMemory::new();
         let mut cpu = CPU::new();
         memory.write_byte(0x00, 0x12);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::Zp);
+        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::ZeroPage);
         assert_eq!(addr, 0x0012);
         assert_eq!(page_crossed, false);
     }
@@ -2468,7 +2481,7 @@ mod tests {
         let offset = 5;
         cpu.x = offset;
         memory.write_byte(0x00, 0x12);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::ZpX);
+        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::ZeroPageX);
         assert_eq!(addr, 0x0012 + offset as u16);
         assert_eq!(page_crossed, false);
     }
@@ -2481,7 +2494,7 @@ mod tests {
         let address = 0xFE;
         cpu.x = offset;
         memory.write_byte(0x00, address);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::ZpX);
+        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::ZeroPageX);
         assert_eq!(addr, 0x03);
         assert_eq!(page_crossed, false);
     }
@@ -2493,7 +2506,7 @@ mod tests {
         let offset = 5;
         cpu.y = offset;
         memory.write_byte(0x00, 0x12);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::ZpY);
+        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::ZeroPageY);
         assert_eq!(addr, 0x0012 + offset as u16);
         assert_eq!(page_crossed, false);
     }
@@ -2506,7 +2519,7 @@ mod tests {
         let address = 0xFE;
         cpu.y = offset;
         memory.write_byte(0x00, address);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::ZpY);
+        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::ZeroPageY);
         assert_eq!(addr, 0x03);
         assert_eq!(page_crossed, false);
     }
@@ -2518,7 +2531,7 @@ mod tests {
         let value = 0x1234;
         memory.write_byte(0x00, 0x34);
         memory.write_byte(0x01, 0x12);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::Abs);
+        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::Absolute);
         assert_eq!(addr, value);
         assert_eq!(page_crossed, false);
     }
@@ -2531,7 +2544,7 @@ mod tests {
         cpu.x = offset;
         memory.write_byte(0x00, 0x34);
         memory.write_byte(0x01, 0x12);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsX);
+        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsoluteX);
         assert_eq!(addr, 0x1239);
         assert_eq!(page_crossed, false);
     }
@@ -2544,7 +2557,7 @@ mod tests {
         cpu.x = offset;
         memory.write_byte(0x00, 0xFE);
         memory.write_byte(0x01, 0xFF);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsX);
+        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsoluteX);
         assert_eq!(addr, 0x0003);
         assert_eq!(page_crossed, true);
     }
@@ -2557,7 +2570,7 @@ mod tests {
         cpu.x = offset;
         memory.write_byte(0x00, 0xFE);
         memory.write_byte(0x01, 0x01);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsX);
+        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsoluteX);
         assert_eq!(addr, 0x0203);
         assert_eq!(page_crossed, true);
     }
@@ -2570,7 +2583,7 @@ mod tests {
         cpu.y = offset;
         memory.write_byte(0x00, 0x34);
         memory.write_byte(0x01, 0x12);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsY);
+        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsoluteY);
         assert_eq!(addr, 0x1239);
         assert_eq!(page_crossed, false);
     }
@@ -2583,7 +2596,7 @@ mod tests {
         cpu.y = offset;
         memory.write_byte(0x00, 0xFE);
         memory.write_byte(0x01, 0xFF);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsY);
+        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsoluteY);
         assert_eq!(addr, 0x0003);
         assert_eq!(page_crossed, true);
     }
@@ -2596,7 +2609,7 @@ mod tests {
         cpu.y = offset;
         memory.write_byte(0x00, 0xFE);
         memory.write_byte(0x01, 0x01);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsY);
+        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsoluteY);
         assert_eq!(addr, 0x0203);
         assert_eq!(page_crossed, true);
     }
@@ -2610,7 +2623,7 @@ mod tests {
         memory.write_byte(0x01, 0x12);
         memory.write_byte(0x1234, 0x56);
         memory.write_byte(0x1235, 0x34);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::Ind);
+        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::Indirect);
         assert_eq!(addr, expected_addr);
         assert_eq!(page_crossed, false);
     }
@@ -2637,7 +2650,7 @@ mod tests {
         let expected_addr = 0x8956;
         memory.write_byte(zp_addr, zp_value);
 
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::Ind);
+        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::Indirect);
         assert_eq!(addr, expected_addr);
         assert_eq!(page_crossed, false);
     }
