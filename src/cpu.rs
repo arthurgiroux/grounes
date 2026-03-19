@@ -252,10 +252,15 @@ pub enum AddressingMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Represents the operand that will be used for some instructions
 enum Operand {
+    /// Use the value of the accumulator
     Accumulator,
+    /// The value that comes directly after the opcode
     Immediate(u8),
+    /// Use a value from memory at a given address
     Memory(u16, bool),
+    /// A signed offset used for branching
     Relative(i8),
 }
 
@@ -268,13 +273,13 @@ pub enum Register {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ArithmeticOp {
-    Inc,
-    Dec,
+pub enum ArithmeticOperation {
+    Increment,
+    Decrement,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BitwiseOp {
+pub enum BitwiseOperation {
     And,
     Or,
     Xor,
@@ -381,21 +386,21 @@ impl CPU {
                 self.instr_compare(memory, operand.unwrap(), Register::A);
                 None
             }
-            Instruction::INX => self.generic_register_arithmetic(Register::X, ArithmeticOp::Inc),
-            Instruction::DEX => self.generic_register_arithmetic(Register::X, ArithmeticOp::Dec),
-            Instruction::INY => self.generic_register_arithmetic(Register::Y, ArithmeticOp::Inc),
-            Instruction::DEY => self.generic_register_arithmetic(Register::Y, ArithmeticOp::Dec),
-            Instruction::AND => self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::And),
-            Instruction::ORA => self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::Or),
-            Instruction::EOR => self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::Xor),
+            Instruction::INX => self.generic_register_arithmetic(Register::X, ArithmeticOperation::Increment),
+            Instruction::DEX => self.generic_register_arithmetic(Register::X, ArithmeticOperation::Decrement),
+            Instruction::INY => self.generic_register_arithmetic(Register::Y, ArithmeticOperation::Increment),
+            Instruction::DEY => self.generic_register_arithmetic(Register::Y, ArithmeticOperation::Decrement),
+            Instruction::AND => self.instr_bitwise(memory, operand.unwrap(), BitwiseOperation::And),
+            Instruction::ORA => self.instr_bitwise(memory, operand.unwrap(), BitwiseOperation::Or),
+            Instruction::EOR => self.instr_bitwise(memory, operand.unwrap(), BitwiseOperation::Xor),
             Instruction::SLO => {
                 self.instr_asl(memory, operand.unwrap());
-                self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::Or);
+                self.instr_bitwise(memory, operand.unwrap(), BitwiseOperation::Or);
                 None
             }
             Instruction::SRE => {
                 self.instr_lsr(memory, operand.unwrap());
-                self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::Xor);
+                self.instr_bitwise(memory, operand.unwrap(), BitwiseOperation::Xor);
                 None
             }
             Instruction::RRA => {
@@ -410,7 +415,7 @@ impl CPU {
             Instruction::ROR => self.instr_ror(memory, operand.unwrap()),
             Instruction::RLA => {
                 self.instr_rol(memory, operand.unwrap());
-                self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::And);
+                self.instr_bitwise(memory, operand.unwrap(), BitwiseOperation::And);
                 None
             }
             Instruction::BCC => {
@@ -1992,7 +1997,7 @@ impl CPU {
         &mut self,
         memory: &mut T,
         operand: Operand,
-        operation: BitwiseOp,
+        operation: BitwiseOperation,
     ) -> Option<u8> {
         let value = match operand {
             Operand::Accumulator => self.a,
@@ -2002,9 +2007,9 @@ impl CPU {
         };
 
         self.a = match operation {
-            BitwiseOp::And => self.a & value,
-            BitwiseOp::Or => self.a | value,
-            BitwiseOp::Xor => self.a ^ value,
+            BitwiseOperation::And => self.a & value,
+            BitwiseOperation::Or => self.a | value,
+            BitwiseOperation::Xor => self.a ^ value,
         };
 
         self.p.update_zero_flag(self.a);
@@ -2242,12 +2247,12 @@ impl CPU {
     fn generic_register_arithmetic(
         &mut self,
         register: Register,
-        operation: ArithmeticOp,
+        operation: ArithmeticOperation,
     ) -> Option<u8> {
         let reg = self.get_register_mut(register);
         let value = match operation {
-            ArithmeticOp::Inc => (*reg).wrapping_add(1),
-            ArithmeticOp::Dec => (*reg).wrapping_sub(1),
+            ArithmeticOperation::Increment => (*reg).wrapping_add(1),
+            ArithmeticOperation::Decrement => (*reg).wrapping_sub(1),
         };
 
         *reg = value;
