@@ -94,6 +94,7 @@ pub enum Instruction {
     ISB, // undocumented opcode, performs INC + SBC
     DCP, // undocumented opcode, performs DEC + CMP
     SLO, // undocumented opcode, performs ASL + ORA
+    RLA, // undocumented opcode, performs ROL + AND
     // Load
     LDA,
     LDX,
@@ -311,6 +312,10 @@ impl CPU {
             Instruction::LSR => self.instr_lsr(memory, operand.unwrap()),
             Instruction::ROL => self.instr_rol(memory, operand.unwrap()),
             Instruction::ROR => self.instr_ror(memory, operand.unwrap()),
+            Instruction::RLA => {
+                self.instr_rol(memory, operand.unwrap());
+                self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::And)
+            }
             Instruction::BCC => {
                 self.generic_instr_branch(operand.unwrap(), !self.p.contains(StatusRegister::C))
             }
@@ -1118,6 +1123,50 @@ impl CPU {
                 base_cycle: 7,
             }),
             // --- END SECTION ROL ---
+            // --- BEGIN SECTION RLA ---
+            0x23 => Some(OpCode {
+                instr: Instruction::RLA,
+                mode: AddressingMode::IndX,
+                value: opcode,
+                base_cycle: 8,
+            }),
+            0x33 => Some(OpCode {
+                instr: Instruction::RLA,
+                mode: AddressingMode::IndY,
+                value: opcode,
+                base_cycle: 8,
+            }),
+            0x2F => Some(OpCode {
+                instr: Instruction::RLA,
+                mode: AddressingMode::Abs,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x27 => Some(OpCode {
+                instr: Instruction::RLA,
+                mode: AddressingMode::Zp,
+                value: opcode,
+                base_cycle: 5,
+            }),
+            0x37 => Some(OpCode {
+                instr: Instruction::RLA,
+                mode: AddressingMode::ZpX,
+                value: opcode,
+                base_cycle: 6,
+            }),
+            0x3B => Some(OpCode {
+                instr: Instruction::RLA,
+                mode: AddressingMode::AbsY,
+                value: opcode,
+                base_cycle: 7,
+            }),
+            0x3F => Some(OpCode {
+                instr: Instruction::RLA,
+                mode: AddressingMode::AbsX,
+                value: opcode,
+                base_cycle: 7,
+            }),
+            // --- END SECTION RLA ---
             // --- BEGIN SECTION ROR ---
             0x6A => Some(OpCode {
                 instr: Instruction::ROR,
