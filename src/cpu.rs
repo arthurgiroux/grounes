@@ -289,12 +289,14 @@ impl CPU {
             Instruction::INC => self.instr_inc(memory, operand.unwrap()),
             Instruction::ISB => {
                 self.instr_inc(memory, operand.unwrap());
-                self.instr_sbc(memory, operand.unwrap())
+                self.instr_sbc(memory, operand.unwrap());
+                None
             }
             Instruction::DEC => self.instr_dec(memory, operand.unwrap()),
             Instruction::DCP => {
                 self.instr_dec(memory, operand.unwrap());
-                self.instr_compare(memory, operand.unwrap(), Register::A)
+                self.instr_compare(memory, operand.unwrap(), Register::A);
+                None
             }
             Instruction::INX => self.generic_register_arithmetic(Register::X, ArithmeticOp::Inc),
             Instruction::DEX => self.generic_register_arithmetic(Register::X, ArithmeticOp::Dec),
@@ -305,15 +307,18 @@ impl CPU {
             Instruction::EOR => self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::Xor),
             Instruction::SLO => {
                 self.instr_asl(memory, operand.unwrap());
-                self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::Or)
+                self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::Or);
+                None
             }
             Instruction::SRE => {
                 self.instr_lsr(memory, operand.unwrap());
-                self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::Xor)
+                self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::Xor);
+                None
             }
             Instruction::RRA => {
                 self.instr_ror(memory, operand.unwrap());
-                self.instr_adc(memory, operand.unwrap())
+                self.instr_adc(memory, operand.unwrap());
+                None
             }
             Instruction::BIT => self.instr_bit(memory, operand.unwrap()),
             Instruction::ASL => self.instr_asl(memory, operand.unwrap()),
@@ -322,7 +327,8 @@ impl CPU {
             Instruction::ROR => self.instr_ror(memory, operand.unwrap()),
             Instruction::RLA => {
                 self.instr_rol(memory, operand.unwrap());
-                self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::And)
+                self.instr_bitwise(memory, operand.unwrap(), BitwiseOp::And);
+                None
             }
             Instruction::BCC => {
                 self.generic_instr_branch(operand.unwrap(), !self.p.contains(StatusRegister::C))
@@ -391,7 +397,7 @@ impl CPU {
             Instruction::CLD => self.instr_clear_flag(StatusRegister::D),
             Instruction::SED => self.instr_set_flag(StatusRegister::D),
             Instruction::CLV => self.instr_clear_flag(StatusRegister::V),
-            Instruction::NOP => None,
+            Instruction::NOP => matches!(&operand, Some(Operand::Memory(_, true))).then_some(1),
         };
 
         let cycles = opcode.base_cycle + extra_cycles.unwrap_or_default();
@@ -544,43 +550,43 @@ impl CPU {
                 instr: Instruction::ISB,
                 mode: AddressingMode::Zp,
                 value: opcode,
-                base_cycle: 3,
+                base_cycle: 5,
             }),
             0xF7 => Some(OpCode {
                 instr: Instruction::ISB,
                 mode: AddressingMode::ZpX,
                 value: opcode,
-                base_cycle: 4,
+                base_cycle: 6,
             }),
             0xEF => Some(OpCode {
                 instr: Instruction::ISB,
                 mode: AddressingMode::Abs,
                 value: opcode,
-                base_cycle: 4,
+                base_cycle: 6,
             }),
             0xFF => Some(OpCode {
                 instr: Instruction::ISB,
                 mode: AddressingMode::AbsX,
                 value: opcode,
-                base_cycle: 4,
+                base_cycle: 7,
             }),
             0xFB => Some(OpCode {
                 instr: Instruction::ISB,
                 mode: AddressingMode::AbsY,
                 value: opcode,
-                base_cycle: 4,
+                base_cycle: 7,
             }),
             0xE3 => Some(OpCode {
                 instr: Instruction::ISB,
                 mode: AddressingMode::IndX,
                 value: opcode,
-                base_cycle: 6,
+                base_cycle: 8,
             }),
             0xF3 => Some(OpCode {
                 instr: Instruction::ISB,
                 mode: AddressingMode::IndY,
                 value: opcode,
-                base_cycle: 5,
+                base_cycle: 8,
             }),
             // --- END SECTION ISB ---
             // --- BEGIN SECTION DEC ---
@@ -626,43 +632,43 @@ impl CPU {
                 instr: Instruction::DCP,
                 mode: AddressingMode::Zp,
                 value: opcode,
-                base_cycle: 3,
+                base_cycle: 5,
             }),
             0xD7 => Some(OpCode {
                 instr: Instruction::DCP,
                 mode: AddressingMode::ZpX,
                 value: opcode,
-                base_cycle: 4,
+                base_cycle: 6,
             }),
             0xCF => Some(OpCode {
                 instr: Instruction::DCP,
                 mode: AddressingMode::Abs,
                 value: opcode,
-                base_cycle: 4,
+                base_cycle: 6,
             }),
             0xDF => Some(OpCode {
                 instr: Instruction::DCP,
                 mode: AddressingMode::AbsX,
                 value: opcode,
-                base_cycle: 4,
+                base_cycle: 7,
             }),
             0xDB => Some(OpCode {
                 instr: Instruction::DCP,
                 mode: AddressingMode::AbsY,
                 value: opcode,
-                base_cycle: 4,
+                base_cycle: 7,
             }),
             0xC3 => Some(OpCode {
                 instr: Instruction::DCP,
                 mode: AddressingMode::IndX,
                 value: opcode,
-                base_cycle: 6,
+                base_cycle: 8,
             }),
             0xD3 => Some(OpCode {
                 instr: Instruction::DCP,
                 mode: AddressingMode::IndY,
                 value: opcode,
-                base_cycle: 5,
+                base_cycle: 8,
             }),
             // --- END SECTION DCP ---
             // --- BEGIN SECTION ASL ---
@@ -702,43 +708,43 @@ impl CPU {
                 instr: Instruction::SLO,
                 mode: AddressingMode::Zp,
                 value: opcode,
-                base_cycle: 3,
+                base_cycle: 5,
             }),
             0x17 => Some(OpCode {
                 instr: Instruction::SLO,
                 mode: AddressingMode::ZpX,
                 value: opcode,
-                base_cycle: 4,
+                base_cycle: 6,
             }),
             0x0F => Some(OpCode {
                 instr: Instruction::SLO,
                 mode: AddressingMode::Abs,
                 value: opcode,
-                base_cycle: 4,
+                base_cycle: 6,
             }),
             0x1F => Some(OpCode {
                 instr: Instruction::SLO,
                 mode: AddressingMode::AbsX,
                 value: opcode,
-                base_cycle: 4,
+                base_cycle: 7,
             }),
             0x1B => Some(OpCode {
                 instr: Instruction::SLO,
                 mode: AddressingMode::AbsY,
                 value: opcode,
-                base_cycle: 4,
+                base_cycle: 7,
             }),
             0x03 => Some(OpCode {
                 instr: Instruction::SLO,
                 mode: AddressingMode::IndX,
                 value: opcode,
-                base_cycle: 6,
+                base_cycle: 8,
             }),
             0x13 => Some(OpCode {
                 instr: Instruction::SLO,
                 mode: AddressingMode::IndY,
                 value: opcode,
-                base_cycle: 5,
+                base_cycle: 8,
             }),
             // --- END SECTION SLO ---
             // --- BEGIN SECTION SRE ---
@@ -1010,7 +1016,7 @@ impl CPU {
                 instr: Instruction::LAX,
                 mode: AddressingMode::IndY,
                 value: opcode,
-                base_cycle: 6,
+                base_cycle: 5,
             }),
             0xB7 => Some(OpCode {
                 instr: Instruction::LAX,
@@ -1108,7 +1114,7 @@ impl CPU {
                 instr: Instruction::SAX,
                 mode: AddressingMode::IndX,
                 value: opcode,
-                base_cycle: 3,
+                base_cycle: 6,
             }),
             0x87 => Some(OpCode {
                 instr: Instruction::SAX,
@@ -1684,19 +1690,19 @@ impl CPU {
                 instr: Instruction::NOP,
                 mode: AddressingMode::Zp,
                 value: opcode,
-                base_cycle: 2,
+                base_cycle: 3,
             }),
             0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => Some(OpCode {
                 instr: Instruction::NOP,
                 mode: AddressingMode::ZpX,
                 value: opcode,
-                base_cycle: 2,
+                base_cycle: 4,
             }),
             0x0C => Some(OpCode {
                 instr: Instruction::NOP,
                 mode: AddressingMode::Abs,
                 value: opcode,
-                base_cycle: 2,
+                base_cycle: 4,
             }),
             0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xEA | 0xFA => Some(OpCode {
                 instr: Instruction::NOP,
@@ -1714,7 +1720,7 @@ impl CPU {
                 instr: Instruction::NOP,
                 mode: AddressingMode::AbsX,
                 value: opcode,
-                base_cycle: 2,
+                base_cycle: 4,
             }),
             // --- END SECTION MISC ---
             _ => None,
