@@ -1,6 +1,13 @@
 use crate::memory::MemoryBus;
 use bitflags::bitflags;
 use std::fmt;
+mod addressing_mode;
+mod instruction;
+mod opcode;
+
+pub use addressing_mode::AddressingMode;
+pub use instruction::Instruction;
+pub use opcode::OpCode;
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -142,116 +149,6 @@ impl fmt::Display for CPU {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Instruction {
-    // Branch operation
-    BCC,
-    BCS,
-    BEQ,
-    BNE,
-    BPL,
-    BMI,
-    BVC,
-    BVS,
-    // Arithmetic
-    ADC,
-    SBC,
-    INC,
-    DEC,
-    INX,
-    DEX,
-    INY,
-    DEY,
-    ISB, // undocumented opcode, performs INC + SBC
-    DCP, // undocumented opcode, performs DEC + CMP
-    SLO, // undocumented opcode, performs ASL + ORA
-    RLA, // undocumented opcode, performs ROL + AND
-    SRE, // undocumented opcode, performs LSR + EOR
-    RRA, // undocumented opcode, performs ROR + ADC
-    // Load
-    LDA,
-    LDX,
-    LDY,
-    LAX, // undocumented opcode, loads into both A and X
-    // Store
-    STA,
-    STX,
-    STY,
-    SAX, // undocumented opcode, store the result of (A & X)
-    // Transfer
-    TAX,
-    TAY,
-    TXA,
-    TYA,
-    // Shift
-    ASL,
-    LSR,
-    ROL,
-    ROR,
-    // Bitwise
-    AND,
-    ORA,
-    EOR,
-    BIT,
-    // Compare
-    CMP,
-    CPX,
-    CPY,
-    // Jump
-    JMP,
-    JSR,
-    RTS,
-    BRK,
-    RTI,
-    // Stack
-    PHA,
-    PLA,
-    PHP,
-    PLP,
-    TXS,
-    TSX,
-    // Flags
-    CLC,
-    SEC,
-    CLI,
-    SEI,
-    CLD,
-    SED,
-    CLV,
-    // MISC
-    NOP,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AddressingMode {
-    /// Some instructions have no address operand, the destination of results are implied.
-    Implicit,
-    /// Many instructions can operate on the accumulator a.
-    Accumulator,
-    /// Uses the 8-bit operand itself as the value for the operation, rather than fetching a value from a memory address.
-    Immediate,
-    /// Branch instructions have a relative addressing mode that specifies an 8-bit signed offset relative to the current PC.
-    Relative,
-    /// Fetches the value from an 8-bit address on the zero page.
-    ZeroPage,
-    /// Fetches the value from an 8-bit address (offsetted by X) on the zero page.
-    ZeroPageX,
-    /// Fetches the value from an 8-bit address (offsetted by Y) on the zero page.
-    ZeroPageY,
-    /// Fetches the value from a 16-bit address anywhere in memory.
-    Absolute,
-    /// Fetches the value from a 16-bit address (offsetted by X) anywhere in memory.
-    AbsoluteX,
-    /// Fetches the value from a 16-bit address (offsetted by Y) anywhere in memory.
-    AbsoluteY,
-    /// The JMP instruction has a special indirect addressing mode that can jump to the address stored in a 16-bit pointer anywhere in memory.
-    Indirect,
-    /// Indexed indirect: Adds X to a base address before fetching a pointer, then read the address
-    IndirectX,
-    /// Indirect Indexed: Fetches the pointer then adds Y and read the address there
-    IndirectY,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Represents the operand that will be used for some instructions
 enum Operand {
     /// Use the value of the accumulator
@@ -283,18 +180,6 @@ pub enum BitwiseOperation {
     And,
     Or,
     Xor,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct OpCode {
-    /// The instruction that will be executed from this opcode
-    instr: Instruction,
-    /// The addressing mode, this will determine how to fetch the operand
-    mode: AddressingMode,
-    /// The value of the opcode
-    value: u8,
-    /// The usual number of cycles that the CPU takes to execute this opcode, additional cycles can be added depending on the addressing mode
-    base_cycle: u8,
 }
 
 /// A memory page is crossed after an increment operation when the high-byte is increased.
@@ -386,10 +271,18 @@ impl CPU {
                 self.instr_compare(memory, operand.unwrap(), Register::A);
                 None
             }
-            Instruction::INX => self.generic_register_arithmetic(Register::X, ArithmeticOperation::Increment),
-            Instruction::DEX => self.generic_register_arithmetic(Register::X, ArithmeticOperation::Decrement),
-            Instruction::INY => self.generic_register_arithmetic(Register::Y, ArithmeticOperation::Increment),
-            Instruction::DEY => self.generic_register_arithmetic(Register::Y, ArithmeticOperation::Decrement),
+            Instruction::INX => {
+                self.generic_register_arithmetic(Register::X, ArithmeticOperation::Increment)
+            }
+            Instruction::DEX => {
+                self.generic_register_arithmetic(Register::X, ArithmeticOperation::Decrement)
+            }
+            Instruction::INY => {
+                self.generic_register_arithmetic(Register::Y, ArithmeticOperation::Increment)
+            }
+            Instruction::DEY => {
+                self.generic_register_arithmetic(Register::Y, ArithmeticOperation::Decrement)
+            }
             Instruction::AND => self.instr_bitwise(memory, operand.unwrap(), BitwiseOperation::And),
             Instruction::ORA => self.instr_bitwise(memory, operand.unwrap(), BitwiseOperation::Or),
             Instruction::EOR => self.instr_bitwise(memory, operand.unwrap(), BitwiseOperation::Xor),
