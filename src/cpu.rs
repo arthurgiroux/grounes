@@ -5,54 +5,124 @@ use std::fmt;
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct StatusRegister: u8 {
-        /// Carry flag: set after some operations if it carried over
-        const C = 0b00000001;
-        /// Zero flag: set if the result of the last operation is zero
-        const Z = 0b00000010;
-        /// Interrupt disabled: set if interrupts are disabled
-        const I = 0b00000100;
-        /// Decimal flag: On NES decimal mode is disabled so this flag has no effect
-        const D = 0b00001000;
-        /// Break flag: Set only when flags are pushed to the stack: 1 for BRK, 0 for IRQ/NMI.
-        /// The CPU does not maintain B in the live status register.
-        const B = 0b00010000;
-        /// Unused flag: always pushed to 1
+        /// Carry flag:
+        ///    This flag is used in additions, subtractions,
+        ///    comparisons and bit rotations. In additions and
+        ///    subtractions, it acts as a 9th bit and lets you to chain
+        ///    operations to calculate with bigger than 8-bit numbers.
+        ///    When subtracting, the Carry flag is the negative of
+        ///    Borrow: if an overflow occurs, the flag will be clear,
+        ///    otherwise set. Comparisons are a special case of
+        ///    subtraction: they assume Carry flag set and Decimal flag
+        ///    clear, and do not store the result of the subtraction
+        ///    anywhere.
+        const Carry = 0b00000001;
+        /// Zero flag:
+        ///    The Zero flag will be affected in the same cases than
+        ///    the Negative flag. Generally, it will be set if an
+        ///    arithmetic register is being loaded with the value zero,
+        ///    and cleared otherwise. The flag will behave differently
+        ///    in Decimal operations.
+        const Zero = 0b00000010;
+        /// Interrupt disabled:
+        ///    This flag can be used to prevent the processor from
+        ///    jumping to the IRQ handler vector ($FFFE) whenever the
+        ///    hardware line -IRQ is active. The flag will be
+        ///    automatically set after taking an interrupt, so that the
+        ///    processor would not keep jumping to the interrupt
+        ///    routine if the -IRQ signal remains low for several clock
+        ///    cycles.
+        const InterruptDisabled = 0b00000100;
+        /// Decimal flag:
+        ///     On the NES the decimal mode is disabled so this flag has no effect.
+        const Decimal = 0b00001000;
+        /// Break flag:
+        ///    This flag is used to distinguish software (BRK)
+        ///    interrupts from hardware interrupts (IRQ or NMI). The B
+        ///    flag is always set except when the P register is being
+        ///    pushed on stack when jumping to an interrupt routine to
+        ///    process only a hardware interrupt.
+        const Break = 0b00010000;
+        /// Unused flag:
+        ///     To the current knowledge, this flag is always 1.
         const Unused = 0b00100000;
-        /// Overflow flag: set after some operations if it overflows
-        const V = 0b01000000;
-        /// Negative flag: Set after some operations when the highest bit is set
-        const N = 0b10000000;
+        /// Overflow flag:
+        ///    After a binary addition or subtraction, the V flag will
+        ///    be set on a sign overflow, cleared otherwise. What is a
+        ///    sign overflow? For instance, if you are trying to add
+        ///    123 and 45 together, the result (168) does not fit in a
+        ///    8-bit signed integer (upper limit 127 and lower limit
+        ///    -128). Similarly, adding -123 to -45 causes the
+        ///    overflow, just like subtracting -45 from 123 or 123 from
+        ///    -45 would do.
+        const Overflow = 0b01000000;
+        /// Negative flag:
+        ///    This flag will be set after any arithmetic operations
+        ///    (when any of the registers A, X or Y is being loaded
+        ///    with a value). Generally, the N flag will be copied from
+        ///    the topmost bit of the register being loaded.
+        const Negative = 0b10000000;
     }
 }
 
 impl StatusRegister {
     fn update_zero_flag(&mut self, value: u8) {
-        self.set(StatusRegister::Z, value == 0);
+        self.set(StatusRegister::Zero, value == 0);
     }
 
     fn update_negative_flag(&mut self, value: u8) {
-        self.set(StatusRegister::N, (value & 0x80) > 0);
+        self.set(StatusRegister::Negative, (value & 0x80) > 0);
     }
 }
 
 #[derive(Debug)]
 pub struct CPU {
-    /// accumulator
+    /// Accumulator:
+    ///     The accumulator is the main register for arithmetic and logic
+    ///     operations. Unlike the index registers X and Y, it has a direct
+    ///     connection to the Arithmetic and Logic Unit (ALU). This is why
+    ///     many operations are only available for the accumulator, not the
+    ///     index registers.
     pub a: u8,
 
-    // Indexes, used for several addressing modes
+    /// Index Register X:
+    ///    This is the main register for addressing data with indices. It has
+    ///    a special addressing mode, indexed indirect, which lets you to
+    ///    have a vector table on the zero page.
     pub x: u8,
+
+    /// Index Register Y:
+    ///    The Y register has the least operations available. On the other
+    ///    hand, only it has the indirect indexed addressing mode that
+    ///    enables access to any memory place without having to use
+    ///    self-modifying code.
     pub y: u8,
 
-    // Program counter
+    /// Program counter:
+    ///    This register points the address from which the next instruction
+    ///    byte (opcode or parameter) will be fetched. Unlike other
+    ///    registers, this one is 16 bits in length. The low and high 8-bit
+    ///    halves of the register are called PCL and PCH, respectively. The
+    ///    Program Counter may be read by pushing its value on the stack.
+    ///    This can be done either by jumping to a subroutine or by causing
+    ///    an interrupt.
     pub pc: u16,
 
-    // stack pointer
+    /// Stack Pointer:
+    ///    The CPU have 256 bytes of stack memory, ranging
+    ///    from $0100 to $01FF. The SP register is a 8-bit offset to the stack
+    ///    page. In other words, whenever anything is being pushed on the
+    ///    stack, it will be stored to the address $0100+S.
     pub sp: StackPointer,
 
-    // status register
+    /// Processor Status:
+    ///    This 8-bit register stores the state of the processor. The bits in
+    ///    this register are called flags. Most of the flags have something
+    ///    to do with arithmetic operations.
     pub p: StatusRegister,
 
+    /// Some changes to the InterruptDisabled flag are delayed to the next cycle,
+    /// We keep track of any pending change that needs to be performed.
     pending_interrupt_flag_change: Option<bool>,
 }
 
@@ -255,7 +325,7 @@ impl CPU {
             y: 0,
             pc: 0,
             sp: StackPointer { value: 0xFD },
-            p: StatusRegister::I | StatusRegister::Unused,
+            p: StatusRegister::InterruptDisabled | StatusRegister::Unused,
             pending_interrupt_flag_change: None,
         }
     }
@@ -271,7 +341,7 @@ impl CPU {
         // When changing the "disable interrupt" flag through some instruction,
         // The change is delayed to the next instruction.
         if let Some(value) = self.pending_interrupt_flag_change {
-            self.p.set(StatusRegister::I, value);
+            self.p.set(StatusRegister::InterruptDisabled, value);
         }
 
         // Fetch the next instruction
@@ -331,29 +401,25 @@ impl CPU {
                 None
             }
             Instruction::BCC => {
-                self.generic_instr_branch(operand.unwrap(), !self.p.contains(StatusRegister::C))
+                self.generic_instr_branch(operand.unwrap(), !self.p.contains(StatusRegister::Carry))
             }
             Instruction::BCS => {
-                self.generic_instr_branch(operand.unwrap(), self.p.contains(StatusRegister::C))
+                self.generic_instr_branch(operand.unwrap(), self.p.contains(StatusRegister::Carry))
             }
             Instruction::BEQ => {
-                self.generic_instr_branch(operand.unwrap(), self.p.contains(StatusRegister::Z))
+                self.generic_instr_branch(operand.unwrap(), self.p.contains(StatusRegister::Zero))
             }
             Instruction::BNE => {
-                self.generic_instr_branch(operand.unwrap(), !self.p.contains(StatusRegister::Z))
+                self.generic_instr_branch(operand.unwrap(), !self.p.contains(StatusRegister::Zero))
             }
-            Instruction::BPL => {
-                self.generic_instr_branch(operand.unwrap(), !self.p.contains(StatusRegister::N))
-            }
-            Instruction::BMI => {
-                self.generic_instr_branch(operand.unwrap(), self.p.contains(StatusRegister::N))
-            }
-            Instruction::BVC => {
-                self.generic_instr_branch(operand.unwrap(), !self.p.contains(StatusRegister::V))
-            }
-            Instruction::BVS => {
-                self.generic_instr_branch(operand.unwrap(), self.p.contains(StatusRegister::V))
-            }
+            Instruction::BPL => self
+                .generic_instr_branch(operand.unwrap(), !self.p.contains(StatusRegister::Negative)),
+            Instruction::BMI => self
+                .generic_instr_branch(operand.unwrap(), self.p.contains(StatusRegister::Negative)),
+            Instruction::BVC => self
+                .generic_instr_branch(operand.unwrap(), !self.p.contains(StatusRegister::Overflow)),
+            Instruction::BVS => self
+                .generic_instr_branch(operand.unwrap(), self.p.contains(StatusRegister::Overflow)),
             Instruction::LDA => self.instr_load(memory, vec![Register::A], operand.unwrap()),
             Instruction::LDX => self.instr_load(memory, vec![Register::X], operand.unwrap()),
             Instruction::LDY => self.instr_load(memory, vec![Register::Y], operand.unwrap()),
@@ -384,8 +450,8 @@ impl CPU {
             Instruction::PLP => self.instr_pull_flags_from_sp(memory),
             Instruction::TSX => self.instr_transfer(Register::SP, Register::X),
             Instruction::TXS => self.instr_transfer(Register::X, Register::SP),
-            Instruction::CLC => self.instr_clear_flag(StatusRegister::C),
-            Instruction::SEC => self.instr_set_flag(StatusRegister::C),
+            Instruction::CLC => self.instr_clear_flag(StatusRegister::Carry),
+            Instruction::SEC => self.instr_set_flag(StatusRegister::Carry),
             Instruction::CLI => {
                 self.pending_interrupt_flag_change = Some(false);
                 None
@@ -394,9 +460,9 @@ impl CPU {
                 self.pending_interrupt_flag_change = Some(true);
                 None
             }
-            Instruction::CLD => self.instr_clear_flag(StatusRegister::D),
-            Instruction::SED => self.instr_set_flag(StatusRegister::D),
-            Instruction::CLV => self.instr_clear_flag(StatusRegister::V),
+            Instruction::CLD => self.instr_clear_flag(StatusRegister::Decimal),
+            Instruction::SED => self.instr_set_flag(StatusRegister::Decimal),
+            Instruction::CLV => self.instr_clear_flag(StatusRegister::Overflow),
             Instruction::NOP => matches!(&operand, Some(Operand::Memory(_, true))).then_some(1),
         };
 
@@ -1838,14 +1904,15 @@ impl CPU {
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
-        let result: u16 = self.a as u16 + value as u16 + self.p.contains(StatusRegister::C) as u16;
+        let result: u16 =
+            self.a as u16 + value as u16 + self.p.contains(StatusRegister::Carry) as u16;
         let prev_value = self.a;
         self.a = result as u8;
-        self.p.set(StatusRegister::C, result > 0xFF);
+        self.p.set(StatusRegister::Carry, result > 0xFF);
         self.p.update_zero_flag(self.a);
         // If the result's sign is different from both A's and memory's, signed overflow (or underflow) occurred.
         self.p.set(
-            StatusRegister::V,
+            StatusRegister::Overflow,
             ((self.a ^ prev_value) & (self.a ^ value) & 0x80) != 0,
         );
         self.p.update_negative_flag(self.a);
@@ -1863,14 +1930,15 @@ impl CPU {
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
-        let result = self.a as u16 + (!value) as u16 + self.p.contains(StatusRegister::C) as u16;
+        let result =
+            self.a as u16 + (!value) as u16 + self.p.contains(StatusRegister::Carry) as u16;
         let prev_value = self.a;
         self.a = result as u8;
-        self.p.set(StatusRegister::C, result >= 0x100);
+        self.p.set(StatusRegister::Carry, result >= 0x100);
         self.p.update_zero_flag(self.a);
         // If the result's sign is different from both A's and memory's, signed overflow (or underflow) occurred.
         self.p.set(
-            StatusRegister::V,
+            StatusRegister::Overflow,
             (self.a ^ prev_value) & (self.a ^ !value) & 0x80 != 0,
         );
         self.p.update_negative_flag(self.a);
@@ -1942,8 +2010,10 @@ impl CPU {
         let bit_test = self.a & value;
 
         self.p.update_zero_flag(bit_test);
-        self.p.set(StatusRegister::V, (value & 0b01000000) > 0);
-        self.p.set(StatusRegister::N, (value & 0b10000000) > 0);
+        self.p
+            .set(StatusRegister::Overflow, (value & 0b01000000) > 0);
+        self.p
+            .set(StatusRegister::Negative, (value & 0b10000000) > 0);
 
         None
     }
@@ -1962,10 +2032,12 @@ impl CPU {
         };
 
         let reg = self.get_register(register);
-        self.p.set(StatusRegister::C, reg >= value);
-        self.p.set(StatusRegister::Z, reg == value);
-        self.p
-            .set(StatusRegister::N, (reg.wrapping_sub(value)) & 0x80 != 0);
+        self.p.set(StatusRegister::Carry, reg >= value);
+        self.p.set(StatusRegister::Zero, reg == value);
+        self.p.set(
+            StatusRegister::Negative,
+            (reg.wrapping_sub(value)) & 0x80 != 0,
+        );
 
         matches!(operand, Operand::Memory(_, true)).then_some(1)
     }
@@ -1980,7 +2052,7 @@ impl CPU {
         };
 
         let shifted_value = value << 1;
-        self.p.set(StatusRegister::C, value & 0x80 != 0);
+        self.p.set(StatusRegister::Carry, value & 0x80 != 0);
         self.p.update_zero_flag(shifted_value);
         self.p.update_negative_flag(shifted_value);
 
@@ -2005,9 +2077,9 @@ impl CPU {
         };
 
         let shifted_value = value >> 1;
-        self.p.set(StatusRegister::C, value & 0x01 > 0);
+        self.p.set(StatusRegister::Carry, value & 0x01 > 0);
         self.p.update_zero_flag(shifted_value);
-        self.p.set(StatusRegister::N, false);
+        self.p.set(StatusRegister::Negative, false);
 
         match operand {
             Operand::Accumulator => {
@@ -2027,8 +2099,8 @@ impl CPU {
             Operand::Memory(addr, _) => memory.read_byte(addr),
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
-        let shifted_value = (value << 1) | (self.p.contains(StatusRegister::C) as u8);
-        self.p.set(StatusRegister::C, value & 0x80 != 0);
+        let shifted_value = (value << 1) | (self.p.contains(StatusRegister::Carry) as u8);
+        self.p.set(StatusRegister::Carry, value & 0x80 != 0);
         self.p.update_zero_flag(shifted_value);
         self.p.update_negative_flag(shifted_value);
 
@@ -2051,8 +2123,8 @@ impl CPU {
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
-        let shifted_value = (value >> 1) | ((self.p.contains(StatusRegister::C) as u8) << 7);
-        self.p.set(StatusRegister::C, value & 0x01 != 0);
+        let shifted_value = (value >> 1) | ((self.p.contains(StatusRegister::Carry) as u8) << 7);
+        self.p.set(StatusRegister::Carry, value & 0x01 != 0);
         self.p.update_zero_flag(shifted_value);
         self.p.update_negative_flag(shifted_value);
 
@@ -2232,11 +2304,11 @@ impl CPU {
 
         // The break flag must be set on the flags that are pushed to the stack, not the flags in the CPU
         let mut current_flag = self.p.clone();
-        current_flag.set(StatusRegister::B, true);
+        current_flag.set(StatusRegister::Break, true);
         self.sp.push_byte(memory, current_flag.bits());
 
         self.pc = u16::from_le_bytes([memory.read_byte(0xFFFE), memory.read_byte(0xFFFF)]);
-        self.p.set(StatusRegister::I, true);
+        self.p.set(StatusRegister::InterruptDisabled, true);
 
         None
     }
@@ -2248,7 +2320,7 @@ impl CPU {
         self.pc = u16::from_le_bytes([pc_low, pc_high]);
 
         self.p = StatusRegister::from_bits_truncate(flags).union(StatusRegister::Unused);
-        self.p.remove(StatusRegister::B);
+        self.p.remove(StatusRegister::Break);
 
         None
     }
@@ -2279,7 +2351,7 @@ impl CPU {
     }
 
     fn instr_push_flags_to_sp<T: MemoryBus>(&mut self, memory: &mut T) -> Option<u8> {
-        let flags = self.p.union(StatusRegister::B);
+        let flags = self.p.union(StatusRegister::Break);
         self.sp.push_byte(memory, flags.bits());
 
         None
@@ -2289,7 +2361,7 @@ impl CPU {
         let value = self.sp.pop_byte(memory);
 
         self.p = StatusRegister::from_bits_truncate(value).union(StatusRegister::Unused);
-        self.p.remove(StatusRegister::B);
+        self.p.remove(StatusRegister::Break);
 
         None
     }
