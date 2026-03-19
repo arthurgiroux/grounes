@@ -117,7 +117,7 @@ impl Mapper for Mapper0 {
                     self.ines.prg_rom.get(address - 0x8000)
                 }
                 // CPU $C000-$FFFF: Last 16 KiB of PRG-ROM (NROM-256) or mirror of $8000-$BFFF (NROM-128).
-                else if addr >= 0xC000 && addr <= 0xFFFF {
+                else if addr >= 0xC000 {
                     let rom_offset = if self.ines.prg_rom.len() > 0x4000 {
                         0x4000
                     } else {

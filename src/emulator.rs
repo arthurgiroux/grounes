@@ -1,9 +1,6 @@
 use crate::cpu::CPU;
 use crate::ines::parse_file;
 use crate::memory::{BusView, Mapper, RAM, create_mapper};
-use std::fs::File;
-use std::io::{self, BufRead, BufReader};
-use std::path::Path;
 
 pub struct Emulator {
     pub cpu: CPU,
@@ -53,6 +50,9 @@ impl Emulator {
 mod tests {
     use super::*;
     use regex::Regex;
+    use std::fs::File;
+    use std::path::Path;
+    use std::io::{BufRead, BufReader};
 
     #[test]
     fn nestest_comparison() {
