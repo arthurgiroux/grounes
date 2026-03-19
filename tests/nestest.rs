@@ -1,9 +1,8 @@
-
+use grounes::emulator::Emulator;
 use regex::Regex;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
-use grounes::emulator::Emulator;
 
 #[test]
 fn nestest_comparison() {
@@ -30,8 +29,7 @@ r"^([0-9A-F]{4})\s+([0-9A-F]{2}(?:\s[0-9A-F]{2}){0,2})\s+(.+?)\s+A:([0-9A-F]{2})
             let pc = u16::from_str_radix(&caps[1], 16).unwrap(); // "C000"
             let bytes = &caps[2]; // "4C F5 C5"
             let ref_opcode =
-                u16::from_str_radix(bytes.split_ascii_whitespace().next().unwrap(), 16)
-                    .unwrap();
+                u16::from_str_radix(bytes.split_ascii_whitespace().next().unwrap(), 16).unwrap();
             let disasm = &caps[3]; // "JMP $C5F5"
             let a = u8::from_str_radix(&caps[4], 16).unwrap(); // "00"
             let x = u8::from_str_radix(&caps[5], 16).unwrap(); // "00"
