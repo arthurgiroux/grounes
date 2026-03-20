@@ -1,11 +1,5 @@
-pub mod cpu;
-pub mod emulator;
-pub mod ines;
-pub mod memory;
-
 use std::io;
-
-use crate::emulator::Emulator;
+use grounes::emulator::Emulator;
 
 fn main() {
     let mut emulator = Emulator::new();

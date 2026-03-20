@@ -1,5 +1,3 @@
-use crate::memory::MemoryBus;
-use std::fmt;
 mod addressing_mode;
 mod instruction;
 mod opcode;
@@ -9,6 +7,9 @@ pub use addressing_mode::AddressingMode;
 pub use instruction::Instruction;
 pub use opcode::OpCode;
 pub use status_register::StatusRegister;
+
+use crate::memory::MemoryBus;
+use std::fmt;
 
 #[derive(Debug)]
 pub struct CPU {
