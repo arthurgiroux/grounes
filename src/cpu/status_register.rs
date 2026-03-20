@@ -74,3 +74,36 @@ impl StatusRegister {
         self.set(StatusRegister::Negative, (value & 0x80) > 0);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn update_zero_flag_should_be_set_when_value_is_zero() {
+        let mut status_register = StatusRegister::empty();
+        status_register.update_zero_flag(0x00);
+        assert!(status_register.contains(StatusRegister::Zero));
+    }
+
+    #[test]
+    fn update_zero_flag_should_not_be_set_when_value_is_notzero() {
+        let mut status_register = StatusRegister::empty();
+        status_register.update_zero_flag(0x04);
+        assert!(!status_register.contains(StatusRegister::Zero));
+    }
+
+    #[test]
+    fn update_negative_flag_should_set_when_value_is_negative() {
+        let mut status_register = StatusRegister::empty();
+        status_register.update_negative_flag((-5 as i8) as u8);
+        assert!(status_register.contains(StatusRegister::Negative));
+    }
+
+    #[test]
+    fn update_negative_flag_should_not_beset_when_value_is_positive() {
+        let mut status_register = StatusRegister::empty();
+        status_register.update_negative_flag((5 as i8) as u8);
+        assert!(!status_register.contains(StatusRegister::Negative));
+    }
+}
