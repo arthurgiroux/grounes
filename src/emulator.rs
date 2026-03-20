@@ -1,6 +1,8 @@
 use crate::cpu::CPU;
 use crate::ines::parse_file;
-use crate::memory::{BusView, Mapper, RAM, create_mapper};
+use crate::mapper::Mapper;
+use crate::mapper::create_mapper;
+use crate::memory::{BusView, RAM};
 
 pub struct Emulator {
     pub cpu: CPU,

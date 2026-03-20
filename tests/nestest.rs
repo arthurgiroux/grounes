@@ -30,14 +30,14 @@ r"^([0-9A-F]{4})\s+([0-9A-F]{2}(?:\s[0-9A-F]{2}){0,2})\s+(.+?)\s+A:([0-9A-F]{2})
             let bytes = &caps[2]; // "4C F5 C5"
             let ref_opcode =
                 u16::from_str_radix(bytes.split_ascii_whitespace().next().unwrap(), 16).unwrap();
-            let disasm = &caps[3]; // "JMP $C5F5"
+            let _disasm = &caps[3]; // "JMP $C5F5"
             let a = u8::from_str_radix(&caps[4], 16).unwrap(); // "00"
             let x = u8::from_str_radix(&caps[5], 16).unwrap(); // "00"
             let y = u8::from_str_radix(&caps[6], 16).unwrap(); // "00"
             let p = u8::from_str_radix(&caps[7], 16).unwrap(); // "24"
             let sp = u8::from_str_radix(&caps[8], 16).unwrap(); // "FD"
-            let ppu_dot = &caps[9]; // "0"
-            let ppu_cyc = &caps[10]; // "21"
+            let _ppu_dot = &caps[9]; // "0"
+            let _ppu_cyc = &caps[10]; // "21"
             let cyc = u32::from_str_radix(&caps[11], 10).unwrap(); // "7"
 
             assert_eq!(
