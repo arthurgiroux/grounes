@@ -1,5 +1,5 @@
-use std::usize;
 use crate::mapper::{Mapper, MapperSource};
+use std::usize;
 
 pub trait MemoryBus {
     fn read_byte(&self, addr: u16) -> u8;
