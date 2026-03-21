@@ -1,5 +1,5 @@
-use std::io;
 use grounes::emulator::Emulator;
+use std::io;
 
 fn main() {
     let mut emulator = Emulator::new();
