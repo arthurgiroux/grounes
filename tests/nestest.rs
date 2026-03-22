@@ -86,7 +86,8 @@ r"^([0-9A-F]{4})\s+([0-9A-F]{2}(?:\s[0-9A-F]{2}){0,2})\s+(.+?)\s+A:([0-9A-F]{2})
                 line_number, cyc, elapsed_cycles, emulator.cpu,
             );
 
-            let (opcode, cycles) = emulator.step();
+            let result = emulator.step();
+            let opcode = result.opcode.unwrap().value;
             assert_eq!(
                 ref_opcode,
                 opcode.into(),
@@ -95,7 +96,7 @@ r"^([0-9A-F]{4})\s+([0-9A-F]{2}(?:\s[0-9A-F]{2}){0,2})\s+(.+?)\s+A:([0-9A-F]{2})
                 opcode,
                 ref_opcode
             );
-            elapsed_cycles += cycles as u32;
+            elapsed_cycles += result.cycles as u32;
             line_number += 1;
         }
         println!("{}", line);

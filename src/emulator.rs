@@ -1,4 +1,4 @@
-use crate::cpu::CPU;
+use crate::cpu::{CPU, StepResult};
 use crate::ines::parse_file;
 use crate::mapper::Mapper;
 use crate::mapper::create_mapper;
@@ -34,7 +34,7 @@ impl Emulator {
         self.cpu.power_up(&mut view);
     }
 
-    pub fn step(&mut self) -> (u8, u8) {
+    pub fn step(&mut self) -> StepResult {
         let mapper = self.mapper.as_mut().expect("no ROM loaded");
         let mut view = BusView {
             ram: &mut self.ram,

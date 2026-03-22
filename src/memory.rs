@@ -25,6 +25,11 @@ pub fn map_address(addr: u16) -> (MemoryRegion, u16) {
     }
 }
 
+/// A memory page is crossed after an increment operation when the high-byte is increased.
+pub fn is_memory_page_crossed(base_addr: u16, incremented_addr: u16) -> bool {
+    (base_addr & 0xFF00) != (incremented_addr & 0xFF00)
+}
+
 pub struct RAM {
     pub memory: Vec<u8>,
 }
