@@ -11,11 +11,7 @@ pub struct INES {
     pub prg_rom: Vec<u8>,
     /// CHR ROM data, if present (8192 * y bytes)
     pub chr_rom: Option<Vec<u8>>,
-    /// PlayChoice INST-ROM, if present (0 or 8192 bytes)
-    pub playchoice_inst_rom: Option<Vec<u8>>,
-    /// PlayChoice PROM, if present (16 bytes Data, 16 bytes CounterOut) (this is often missing; see PC10 ROM-Images for details)
-    pub playchoice_prom: Option<Vec<u8>>,
-
+    /// PRG RAM: if present between 0 and 8192 bytes
     pub prg_ram: Option<Vec<u8>>,
 }
 
@@ -48,8 +44,8 @@ impl From<std::io::Error> for InesParseError {
 
 #[derive(Debug, PartialEq)]
 pub enum NametableArrangement {
-    Vertical,
-    Horizontal,
+    Vertical = 0,
+    Horizontal = 1,
 }
 
 #[derive(Debug)]
@@ -118,17 +114,14 @@ pub fn parse_file(filepath: &str) -> Result<INES, InesParseError> {
         None
     };
 
+    let prg_ram = Some(vec![0u8; 8192]);
+
     Ok(INES {
         header: parsed_header,
         trainer,
         prg_rom,
         chr_rom,
-        // TODO
-        playchoice_inst_rom: None,
-        // TODO
-        playchoice_prom: None,
-        // TODO
-        prg_ram: None,
+        prg_ram,
     })
 }
 
