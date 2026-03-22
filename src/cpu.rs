@@ -8,7 +8,7 @@ pub use instruction::Instruction;
 pub use opcode::OpCode;
 pub use status_register::StatusRegister;
 
-use crate::memory::MemoryBus;
+use crate::memory::{MemoryBus, is_memory_page_crossed};
 use std::fmt;
 
 #[derive(Debug)]
@@ -111,11 +111,6 @@ pub enum BitwiseOperation {
     Xor,
 }
 
-/// A memory page is crossed after an increment operation when the high-byte is increased.
-fn is_page_crossed(base_addr: u16, incremented_addr: u16) -> bool {
-    (base_addr & 0xFF00) != (incremented_addr & 0xFF00)
-}
-
 #[derive(Debug)]
 pub struct StackPointer {
     pub value: u8,
@@ -134,6 +129,11 @@ impl StackPointer {
         let value = memory.read_byte(0x0100 | self.value as u16);
         value
     }
+}
+
+pub struct StepResult {
+    pub opcode: Option<OpCode>,
+    pub cycles: u8,
 }
 
 impl Default for StackPointer {
@@ -169,7 +169,7 @@ impl CPU {
 
     /// Step the CPU: fetch the next instruction and execute it
     /// returns the number of cycles it took
-    pub fn step<T: MemoryBus>(&mut self, memory: &mut T) -> (u8, u8) {
+    pub fn step<T: MemoryBus>(&mut self, memory: &mut T) -> StepResult {
         // When changing the "disable interrupt" flag through some instruction,
         // The change is delayed to the next instruction.
         if let Some(value) = self.pending_interrupt_flag_change {
@@ -183,7 +183,10 @@ impl CPU {
         let decode = OpCode::try_from(value);
         if decode.is_err() {
             eprintln!("Invalid opcode {:02X}, skipping it.", value);
-            return (value, 0);
+            return StepResult {
+                opcode: None,
+                cycles: 0,
+            };
         }
         let opcode = decode.unwrap();
 
@@ -312,7 +315,10 @@ impl CPU {
 
         let cycles = opcode.base_cycle + extra_cycles.unwrap_or_default();
 
-        (value, cycles)
+        StepResult {
+            opcode: Some(opcode),
+            cycles,
+        }
     }
 
     fn fetch_byte<T: MemoryBus>(&mut self, memory: &T) -> u8 {
@@ -372,13 +378,13 @@ impl CPU {
             AddressingMode::AbsoluteX => {
                 let arg = self.fetch_word(memory);
                 let addr = arg.wrapping_add(self.x as u16);
-                (addr, is_page_crossed(arg, addr))
+                (addr, is_memory_page_crossed(arg, addr))
             }
             // Fetches the value from a 16-bit address with the offset in Y.
             AddressingMode::AbsoluteY => {
                 let arg = self.fetch_word(memory);
                 let addr = arg.wrapping_add(self.y as u16);
-                (addr, is_page_crossed(arg, addr))
+                (addr, is_memory_page_crossed(arg, addr))
             }
             AddressingMode::Indirect => {
                 let arg = self.fetch_word(memory);
@@ -411,7 +417,7 @@ impl CPU {
                 let high = memory.read_byte(arg.wrapping_add(1) as u16);
                 let base_addr = u16::from_le_bytes([low, high]);
                 let addr = base_addr.wrapping_add(self.y as u16);
-                (addr, is_page_crossed(base_addr, addr))
+                (addr, is_memory_page_crossed(base_addr, addr))
             }
             _ => panic!("addressing mode {addressing_mode:?} is not operating on memory."),
         }
@@ -775,7 +781,7 @@ impl CPU {
         if should_branch {
             let prev_pc = self.pc;
             self.pc = self.pc.wrapping_add_signed(value.into());
-            let page_crossed = is_page_crossed(prev_pc, self.pc);
+            let page_crossed = is_memory_page_crossed(prev_pc, self.pc);
             Some(if page_crossed { 2 } else { 1 })
         } else {
             None
