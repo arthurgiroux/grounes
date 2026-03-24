@@ -174,6 +174,7 @@ impl CPU {
         // The change is delayed to the next instruction.
         if let Some(value) = self.pending_interrupt_flag_change {
             self.p.set(StatusRegister::InterruptDisabled, value);
+            self.pending_interrupt_flag_change = None
         }
 
         // Fetch the next instruction
@@ -1166,5 +1167,32 @@ mod tests {
         sp.push_byte(&mut memory, second_value);
         assert_eq!(sp.pop_byte(&memory), second_value);
         assert_eq!(sp.pop_byte(&memory), first_value);
+    }
+
+    #[test]
+    fn pending_interrupt_flag_change_should_be_set_when_requested() {
+        let mut memory = MockMemory::new();
+        let mut cpu = CPU::new();
+        cpu.p.set(StatusRegister::InterruptDisabled, false);
+
+        // SEI
+        memory.write_byte(0x00, 0x78);
+        // NOP
+        memory.write_byte(0x01, 0x04);
+
+        assert_eq!(cpu.pending_interrupt_flag_change, None);
+        assert!(!cpu.p.contains(StatusRegister::InterruptDisabled));
+
+        let result = cpu.step(&mut memory);
+        assert_eq!(result.opcode.unwrap().instr, Instruction::SEI);
+        // Interrupt disabled should not be set yet, but pending
+        assert!(!cpu.p.contains(StatusRegister::InterruptDisabled));
+        assert_eq!(cpu.pending_interrupt_flag_change, Some(true));
+
+        let result2 = cpu.step(&mut memory);
+        assert_eq!(result2.opcode.unwrap().instr, Instruction::NOP);
+        // Interrupt disabled should be set, pending should be cleared
+        assert!(cpu.p.contains(StatusRegister::InterruptDisabled));
+        assert_eq!(cpu.pending_interrupt_flag_change, None);
     }
 }
