@@ -27,11 +27,11 @@ impl Emulator {
 
     pub fn power_up(&mut self) {
         let mapper = self.mapper.as_mut().expect("no ROM loaded");
-        let mut view = BusView {
+        let view = BusView {
             ram: &mut self.ram,
             mapper: mapper.as_mut(),
         };
-        self.cpu.power_up(&mut view);
+        self.cpu.power_up(&view);
     }
 
     pub fn step(&mut self) -> StepResult {
@@ -45,5 +45,13 @@ impl Emulator {
 
     pub fn set_pc(&mut self, value: u16) {
         self.cpu.pc = value;
+    }
+
+    pub fn get_bus_view(&mut self) -> BusView<'_> {
+        let mapper = self.mapper.as_mut().expect("no ROM loaded");
+        BusView {
+            ram: &mut self.ram,
+            mapper: mapper.as_mut(),
+        }
     }
 }
