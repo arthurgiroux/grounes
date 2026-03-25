@@ -1,8 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+use egui_memory_editor::MemoryEditor;
 use grounes::cpu::{StatusRegister, StepResult};
 use grounes::emulator::Emulator;
 
-use eframe::egui;
+use eframe::egui::{self, Color32, Layout};
+use grounes::memory::MemoryBus;
 
 fn main() -> eframe::Result {
     let native_options = eframe::NativeOptions::default();
@@ -20,6 +22,8 @@ struct GrounesApp {
     step_count: String,
     instruction_history: Vec<String>,
     load_error: Option<String>,
+    show_debug_panel: bool,
+    memory_editor: MemoryEditor,
 }
 
 impl GrounesApp {
@@ -31,6 +35,13 @@ impl GrounesApp {
             step_count: "1".to_string(),
             instruction_history: vec![],
             load_error: None,
+            show_debug_panel: true,
+            memory_editor: MemoryEditor::new()
+                .with_address_range("All", 0..0xFFFF)
+                .with_address_range("RAM", 0..0x1FFF)
+                .with_address_range("PPU", 0x2000..0x4000)
+                .with_address_range("APU", 0x4000..0x401F)
+                .with_address_range("Cartridge", 0x4020..0xFFFF),
         }
     }
 }
@@ -51,8 +62,8 @@ fn flag_char(p: StatusRegister, flag: StatusRegister) -> &'static str {
 
 impl eframe::App for GrounesApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            // Section 1: ROM loading
+        // Top toolbar
+        egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label("ROM:");
                 ui.text_edit_singleline(&mut self.rom_path);
@@ -69,69 +80,115 @@ impl eframe::App for GrounesApp {
                         }
                     }
                 }
-            });
-            if let Some(err) = &self.load_error {
-                ui.colored_label(egui::Color32::RED, err);
-            }
-
-            if !self.rom_loaded {
-                return;
-            }
-
-            ui.separator();
-
-            // Section 2: CPU state
-            let cpu = &self.emulator.cpu;
-            ui.monospace(format!(
-                "PC: ${:04X}   A: ${:02X}   X: ${:02X}   Y: ${:02X}   SP: ${:02X}",
-                cpu.pc, cpu.a, cpu.x, cpu.y, cpu.sp.value
-            ));
-            let p = cpu.p;
-            ui.monospace(format!("Flags: N V U B D I Z C"));
-            ui.monospace(format!(
-                "       {} {} {} {} {} {} {} {}",
-                flag_char(p, StatusRegister::Negative),
-                flag_char(p, StatusRegister::Overflow),
-                flag_char(p, StatusRegister::Unused),
-                flag_char(p, StatusRegister::Break),
-                flag_char(p, StatusRegister::Decimal),
-                flag_char(p, StatusRegister::InterruptDisabled),
-                flag_char(p, StatusRegister::Zero),
-                flag_char(p, StatusRegister::Carry),
-            ));
-
-            ui.separator();
-
-            // Section 3: Step controls
-            ui.horizontal(|ui| {
-                if ui.button("Step 1").clicked() {
-                    let result = self.emulator.step();
-                    let n = self.instruction_history.len() + 1;
-                    self.instruction_history
-                        .push(format!("#{n}: {}", format_step(&result)));
+                if let Some(err) = &self.load_error {
+                    ui.colored_label(Color32::RED, err);
                 }
-                ui.label("Steps:");
-                ui.add(egui::TextEdit::singleline(&mut self.step_count).desired_width(50.0));
-                if ui.button("Step N").clicked() {
-                    if let Ok(n) = self.step_count.trim().parse::<usize>() {
-                        for _ in 0..n {
-                            let result = self.emulator.step();
-                            let idx = self.instruction_history.len() + 1;
-                            self.instruction_history
-                                .push(format!("#{idx}: {}", format_step(&result)));
-                        }
+                ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.toggle_value(&mut self.show_debug_panel, "Debug");
+                });
+            });
+        });
+
+        // Right debug panel
+        if self.show_debug_panel {
+            egui::SidePanel::right("debug_panel")
+                .resizable(true)
+                .min_width(300.0)
+                .show(ctx, |ui| {
+                    if !self.rom_loaded {
+                        ui.label("Load a ROM to see debug info.");
+                        return;
                     }
-                }
-            });
 
-            ui.separator();
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        // CPU State
+                        egui::CollapsingHeader::new("CPU State")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                let cpu = &self.emulator.cpu;
+                                ui.monospace(format!(
+                                    "PC: ${:04X}   A: ${:02X}   X: ${:02X}   Y: ${:02X}   SP: ${:02X}",
+                                    cpu.pc, cpu.a, cpu.x, cpu.y, cpu.sp.value
+                                ));
+                                let p = cpu.p;
+                                ui.monospace("Flags: N V U B D I Z C");
+                                ui.monospace(format!(
+                                    "       {} {} {} {} {} {} {} {}",
+                                    flag_char(p, StatusRegister::Negative),
+                                    flag_char(p, StatusRegister::Overflow),
+                                    flag_char(p, StatusRegister::Unused),
+                                    flag_char(p, StatusRegister::Break),
+                                    flag_char(p, StatusRegister::Decimal),
+                                    flag_char(p, StatusRegister::InterruptDisabled),
+                                    flag_char(p, StatusRegister::Zero),
+                                    flag_char(p, StatusRegister::Carry),
+                                ));
+                            });
 
-            // Section 4: Instruction history
-            ui.label("Instruction history:");
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                for entry in self.instruction_history.iter().rev() {
-                    ui.monospace(entry);
-                }
+                        // Step Controls
+                        egui::CollapsingHeader::new("Step Controls")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    if ui.button("Step 1").clicked() {
+                                        let result = self.emulator.step();
+                                        let n = self.instruction_history.len() + 1;
+                                        self.instruction_history
+                                            .push(format!("#{n}: {}", format_step(&result)));
+                                    }
+                                    ui.label("Steps:");
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut self.step_count)
+                                            .desired_width(50.0),
+                                    );
+                                    if ui.button("Step N").clicked() {
+                                        if let Ok(n) = self.step_count.trim().parse::<usize>() {
+                                            for _ in 0..n {
+                                                let result = self.emulator.step();
+                                                let idx = self.instruction_history.len() + 1;
+                                                self.instruction_history
+                                                    .push(format!("#{idx}: {}", format_step(&result)));
+                                            }
+                                        }
+                                    }
+                                });
+                            });
+
+                        // Instruction History
+                        egui::CollapsingHeader::new("Instruction History")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                egui::ScrollArea::vertical()
+                                    .id_salt("history")
+                                    .max_height(200.0)
+                                    .show(ui, |ui| {
+                                        for entry in self.instruction_history.iter().rev() {
+                                            ui.monospace(entry);
+                                        }
+                                    });
+                            });
+
+                        // Memory View
+                        egui::CollapsingHeader::new("Memory View")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                self.memory_editor.draw_editor_contents(
+                                    ui,
+                                    &mut self.emulator.get_bus_view(),
+                                    |mem, address| mem.read_byte(address as u16).into(),
+                                    |mem, address, val| mem.write_byte(address as u16, val),
+                                );
+                            });
+                    });
+                });
+        }
+
+        // Central output area
+        egui::CentralPanel::default().show(ctx, |ui| {
+            let rect = ui.available_rect_before_wrap();
+            ui.painter().rect_filled(rect, 0.0, Color32::BLACK);
+            ui.centered_and_justified(|ui| {
+                ui.colored_label(Color32::DARK_GRAY, "Screen output");
             });
         });
     }

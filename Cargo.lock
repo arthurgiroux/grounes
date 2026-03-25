@@ -900,6 +900,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_memory_editor"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "784bf618e45a50116a2171ef8232f376c073ff7f12416ee35663e6959407dc60"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "emath"
 version = "0.33.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1338,6 +1347,7 @@ dependencies = [
  "bitflags 2.11.0",
  "eframe",
  "egui",
+ "egui_memory_editor",
  "regex",
 ]
 
