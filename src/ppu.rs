@@ -19,8 +19,8 @@ pub mod ppu_reg {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WriteLocation {
-    LowByte,
-    HighByte,
+    First,
+    Second,
 }
 
 struct WriteLatch {
@@ -29,34 +29,22 @@ struct WriteLatch {
 
 impl WriteLatch {
     pub fn toggle(&mut self) {
-        if self.location == WriteLocation::LowByte {
-            self.location = WriteLocation::HighByte
+        if self.location == WriteLocation::First {
+            self.location = WriteLocation::Second
         } else {
-            self.location = WriteLocation::LowByte
+            self.location = WriteLocation::First
         }
     }
 
     pub fn clear(&mut self) {
-        self.location = WriteLocation::LowByte
-    }
-
-    pub fn update_target_value(&mut self, value: u8, target: &mut u16) {
-        match self.location {
-            WriteLocation::LowByte => {
-                *target = (*target & 0xFF00) | (value as u16);
-            }
-            WriteLocation::HighByte => {
-                *target = (*target & 0x00FF) | ((value as u16) << 8);
-            }
-        }
-        self.toggle();
+        self.location = WriteLocation::First
     }
 }
 
 impl Default for WriteLatch {
     fn default() -> Self {
         WriteLatch {
-            location: WriteLocation::LowByte,
+            location: WriteLocation::First,
         }
     }
 }
@@ -67,6 +55,34 @@ struct PPU {
     ppu_control: PPUControl,
     vram: Vec<u8>,
     vram_address: u16,
+    scroll_x: u8,
+    scroll_y: u8,
+}
+
+impl PPU {
+    fn update_vram_address(&mut self, value: u8) {
+        match self.write_latch.location {
+            WriteLocation::First => {
+                self.vram_address = (self.vram_address & 0xFF00) | (value as u16);
+            }
+            WriteLocation::Second => {
+                self.vram_address = (self.vram_address & 0x00FF) | ((value as u16) << 8);
+            }
+        }
+        self.write_latch.toggle();
+    }
+
+    fn update_scroll(&mut self, value: u8) {
+        match self.write_latch.location {
+            WriteLocation::First => {
+                self.scroll_x = (self.scroll_x & 0x01) | (value & 0b11111110);
+            }
+            WriteLocation::Second => {
+                self.scroll_y = (self.scroll_y & 0x01) | (value & 0b11111110);
+            }
+        }
+        self.write_latch.toggle();
+    }
 }
 
 impl Default for PPU {
@@ -77,6 +93,8 @@ impl Default for PPU {
             vram_address: 0,
             ppu_mask: PPUMask::default(),
             ppu_control: PPUControl::default(),
+            scroll_x: 0,
+            scroll_y: 0,
         }
     }
 }
@@ -90,13 +108,24 @@ impl MemoryBus for PPU {
         match addr & 0x2007 {
             ppu_reg::CONTROL => {
                 self.ppu_control.update(value);
+                self.scroll_x = (self.scroll_x & 0b11111110) | (value & 0x01);
+                self.scroll_y = (self.scroll_y & 0b11111110) | ((value >> 1) & 0x01);
             }
             ppu_reg::MASK => {
                 self.ppu_mask.update(value);
             }
             ppu_reg::ADDR => {
-                self.write_latch
-                    .update_target_value(value, &mut self.vram_address);
+                self.update_vram_address(value);
+            }
+            ppu_reg::DATA => {
+                if let Some(item) = self.vram.get_mut(self.vram_address as usize) {
+                    *item = value;
+                }
+                self.vram_address
+                    .wrapping_add(self.ppu_control.get_vram_address_increment());
+            }
+            ppu_reg::SCROLL => {
+                self.update_scroll(value);
             }
 
             _ => {}
