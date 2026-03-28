@@ -76,10 +76,10 @@ impl PPU {
     fn update_vram_address(&mut self, value: u8) {
         match self.write_latch.location {
             WriteLocation::First => {
-                self.vram_address = (self.vram_address & 0xFF00) | (value as u16);
+                self.vram_address = (self.vram_address & 0x00FF) | (value as u16 & 0x3F) << 8;
             }
             WriteLocation::Second => {
-                self.vram_address = (self.vram_address & 0x00FF) | ((value as u16) << 8);
+                self.vram_address = (self.vram_address & 0xFF00) | (value as u16);
             }
         }
         self.write_latch.toggle();
