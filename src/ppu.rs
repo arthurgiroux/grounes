@@ -1,9 +1,18 @@
 mod ppu_control;
 mod ppu_mask;
-use crate::{
-    memory::MemoryBus,
-    ppu::{ppu_control::PPUControl, ppu_mask::PPUMask},
-};
+
+use crate::ppu::{ppu_control::PPUControl, ppu_mask::PPUMask};
+
+use bitflags::bitflags;
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct PPUStatus: u8 {
+        const SpriteOverflow = 0b00100000;
+        const Sprite0Hit = 0b01000000;
+        const VBlank = 0b10000000;
+    }
+}
 
 pub mod ppu_reg {
     pub const CONTROL: u16 = 0x2000;
@@ -49,14 +58,18 @@ impl Default for WriteLatch {
     }
 }
 
-struct PPU {
+pub struct PPU {
     write_latch: WriteLatch,
     ppu_mask: PPUMask,
     ppu_control: PPUControl,
     vram: Vec<u8>,
     vram_address: u16,
+    vram_read_buffer: u8,
     scroll_x: u8,
     scroll_y: u8,
+    oam: Vec<u8>,
+    oam_address: u8,
+    status: PPUStatus,
 }
 
 impl PPU {
@@ -91,17 +104,42 @@ impl Default for PPU {
             write_latch: WriteLatch::default(),
             vram: vec![0u8; 2048],
             vram_address: 0,
+            vram_read_buffer: 0,
             ppu_mask: PPUMask::default(),
             ppu_control: PPUControl::default(),
             scroll_x: 0,
             scroll_y: 0,
+            oam: vec![0u8; 256],
+            oam_address: 0,
+            status: PPUStatus::from_bits_truncate(0),
         }
     }
 }
 
-impl MemoryBus for PPU {
-    fn read_byte(&self, addr: u16) -> u8 {
-        todo!()
+impl PPU {
+    fn read_byte(&mut self, addr: u16) -> u8 {
+        match addr & 0x2007 {
+            ppu_reg::DATA => {
+                let value = self.vram_read_buffer;
+                self.vram_read_buffer = self
+                    .vram
+                    .get(self.vram_address as usize)
+                    .copied()
+                    .unwrap_or(0);
+                self.vram_address = self
+                    .vram_address
+                    .wrapping_add(self.ppu_control.get_vram_address_increment());
+                value
+            }
+            ppu_reg::OAM_DATA => self.oam[self.oam_address as usize],
+            ppu_reg::STATUS => {
+                let value = self.status.bits();
+                self.status.set(PPUStatus::VBlank, false);
+                self.write_latch.clear();
+                value
+            }
+            _ => 0,
+        }
     }
 
     fn write_byte(&mut self, addr: u16, value: u8) {
@@ -121,11 +159,19 @@ impl MemoryBus for PPU {
                 if let Some(item) = self.vram.get_mut(self.vram_address as usize) {
                     *item = value;
                 }
-                self.vram_address
+                self.vram_address = self
+                    .vram_address
                     .wrapping_add(self.ppu_control.get_vram_address_increment());
             }
             ppu_reg::SCROLL => {
                 self.update_scroll(value);
+            }
+            ppu_reg::OAM_ADDR => {
+                self.oam_address = value;
+            }
+            ppu_reg::OAM_DATA => {
+                self.oam[self.oam_address as usize] = value;
+                self.oam_address = self.oam_address.wrapping_add(1);
             }
 
             _ => {}

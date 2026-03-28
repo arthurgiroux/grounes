@@ -3,10 +3,12 @@ use crate::ines::parse_file;
 use crate::mapper::Mapper;
 use crate::mapper::create_mapper;
 use crate::memory::{BusView, RAM};
+use crate::ppu::PPU;
 
 pub struct Emulator {
     pub cpu: CPU,
     ram: RAM,
+    ppu: PPU,
     mapper: Option<Box<dyn Mapper>>,
 }
 
@@ -15,6 +17,7 @@ impl Emulator {
         Emulator {
             cpu: CPU::default(),
             ram: RAM::new(2048),
+            ppu: PPU::default(),
             mapper: None,
         }
     }
