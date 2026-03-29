@@ -30,11 +30,12 @@ impl Emulator {
 
     pub fn power_up(&mut self) {
         let mapper = self.mapper.as_mut().expect("no ROM loaded");
-        let view = BusView {
+        let mut view = BusView {
             ram: &mut self.ram,
             mapper: mapper.as_mut(),
+            ppu: &mut self.ppu,
         };
-        self.cpu.power_up(&view);
+        self.cpu.power_up(&mut view);
     }
 
     pub fn step(&mut self) -> StepResult {
@@ -42,6 +43,7 @@ impl Emulator {
         let mut view = BusView {
             ram: &mut self.ram,
             mapper: mapper.as_mut(),
+            ppu: &mut self.ppu,
         };
         self.cpu.step(&mut view)
     }
@@ -55,6 +57,7 @@ impl Emulator {
         BusView {
             ram: &mut self.ram,
             mapper: mapper.as_mut(),
+            ppu: &mut self.ppu,
         }
     }
 }
