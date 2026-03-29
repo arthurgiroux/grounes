@@ -124,7 +124,7 @@ impl StackPointer {
         self.value -= 1;
     }
 
-    pub fn pop_byte<T: MemoryBus>(&mut self, memory: &T) -> u8 {
+    pub fn pop_byte<T: MemoryBus>(&mut self, memory: &mut T) -> u8 {
         self.value += 1;
         let value = memory.read_byte(0x0100 | self.value as u16);
         value
@@ -162,7 +162,7 @@ impl CPU {
         }
     }
 
-    pub fn power_up<T: MemoryBus>(&mut self, memory: &T) {
+    pub fn power_up<T: MemoryBus>(&mut self, memory: &mut T) {
         // Reference value: https://www.nesdev.org/wiki/CPU_power_up_state
         self.pc = u16::from_le_bytes([memory.read_byte(0xFFFC), memory.read_byte(0xFFFD)]);
     }
@@ -322,13 +322,13 @@ impl CPU {
         }
     }
 
-    fn fetch_byte<T: MemoryBus>(&mut self, memory: &T) -> u8 {
+    fn fetch_byte<T: MemoryBus>(&mut self, memory: &mut T) -> u8 {
         let value = memory.read_byte(self.pc);
         self.pc += 1;
         value
     }
 
-    fn fetch_word<T: MemoryBus>(&mut self, memory: &T) -> u16 {
+    fn fetch_word<T: MemoryBus>(&mut self, memory: &mut T) -> u16 {
         let low = memory.read_byte(self.pc);
         let high = memory.read_byte(self.pc + 1);
         self.pc += 2;
@@ -337,7 +337,7 @@ impl CPU {
 
     fn resolve_operand<T: MemoryBus>(
         &mut self,
-        memory: &T,
+        memory: &mut T,
         mode: AddressingMode,
     ) -> Option<Operand> {
         match mode {
@@ -354,7 +354,7 @@ impl CPU {
 
     fn get_operand_address<T: MemoryBus>(
         &mut self,
-        memory: &T,
+        memory: &mut T,
         addressing_mode: AddressingMode,
     ) -> (u16, bool) {
         match addressing_mode {
@@ -549,7 +549,7 @@ impl CPU {
 
     fn instr_compare<T: MemoryBus>(
         &mut self,
-        memory: &T,
+        memory: &mut T,
         operand: Operand,
         register: Register,
     ) -> Option<u8> {
@@ -722,7 +722,7 @@ impl CPU {
 
     fn instr_load<T: MemoryBus>(
         &mut self,
-        memory: &T,
+        memory: &mut T,
         registers: Vec<Register>,
         operand: Operand,
     ) -> Option<u8> {
@@ -866,7 +866,7 @@ impl CPU {
 
     fn instr_pull_register_from_sp<T: MemoryBus>(
         &mut self,
-        memory: &T,
+        memory: &mut T,
         register: Register,
     ) -> Option<u8> {
         let value = self.sp.pop_byte(memory);
@@ -886,7 +886,7 @@ impl CPU {
         None
     }
 
-    fn instr_pull_flags_from_sp<T: MemoryBus>(&mut self, memory: &T) -> Option<u8> {
+    fn instr_pull_flags_from_sp<T: MemoryBus>(&mut self, memory: &mut T) -> Option<u8> {
         let value = self.sp.pop_byte(memory);
 
         self.p = StatusRegister::from_bits_truncate(value).union(StatusRegister::Unused);
@@ -923,7 +923,7 @@ mod tests {
     }
 
     impl MemoryBus for MockMemory {
-        fn read_byte(&self, addr: u16) -> u8 {
+        fn read_byte(&mut self, addr: u16) -> u8 {
             self.memory[addr as usize]
         }
 
@@ -949,7 +949,7 @@ mod tests {
         let value = 0x34;
         cpu.pc = addr;
         memory.write_byte(addr, value);
-        assert_eq!(cpu.fetch_byte(&memory), value);
+        assert_eq!(cpu.fetch_byte(&mut memory), value);
         assert_eq!(cpu.pc, addr + 1);
     }
 
@@ -962,7 +962,7 @@ mod tests {
         cpu.pc = addr;
         memory.write_byte(addr, 0x56);
         memory.write_byte(addr + 1, 0x34);
-        assert_eq!(cpu.fetch_word(&memory), value);
+        assert_eq!(cpu.fetch_word(&mut memory), value);
         assert_eq!(cpu.pc, addr + 2);
     }
 
@@ -971,7 +971,7 @@ mod tests {
         let mut memory = MockMemory::new();
         let mut cpu = CPU::new();
         memory.write_byte(0x00, 0x12);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::ZeroPage);
+        let (addr, page_crossed) = cpu.get_operand_address(&mut memory, AddressingMode::ZeroPage);
         assert_eq!(addr, 0x0012);
         assert_eq!(page_crossed, false);
     }
@@ -983,7 +983,7 @@ mod tests {
         let offset = 5;
         cpu.x = offset;
         memory.write_byte(0x00, 0x12);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::ZeroPageX);
+        let (addr, page_crossed) = cpu.get_operand_address(&mut memory, AddressingMode::ZeroPageX);
         assert_eq!(addr, 0x0012 + offset as u16);
         assert_eq!(page_crossed, false);
     }
@@ -996,7 +996,7 @@ mod tests {
         let address = 0xFE;
         cpu.x = offset;
         memory.write_byte(0x00, address);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::ZeroPageX);
+        let (addr, page_crossed) = cpu.get_operand_address(&mut memory, AddressingMode::ZeroPageX);
         assert_eq!(addr, 0x03);
         assert_eq!(page_crossed, false);
     }
@@ -1008,7 +1008,7 @@ mod tests {
         let offset = 5;
         cpu.y = offset;
         memory.write_byte(0x00, 0x12);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::ZeroPageY);
+        let (addr, page_crossed) = cpu.get_operand_address(&mut memory, AddressingMode::ZeroPageY);
         assert_eq!(addr, 0x0012 + offset as u16);
         assert_eq!(page_crossed, false);
     }
@@ -1021,7 +1021,7 @@ mod tests {
         let address = 0xFE;
         cpu.y = offset;
         memory.write_byte(0x00, address);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::ZeroPageY);
+        let (addr, page_crossed) = cpu.get_operand_address(&mut memory, AddressingMode::ZeroPageY);
         assert_eq!(addr, 0x03);
         assert_eq!(page_crossed, false);
     }
@@ -1033,7 +1033,7 @@ mod tests {
         let value = 0x1234;
         memory.write_byte(0x00, 0x34);
         memory.write_byte(0x01, 0x12);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::Absolute);
+        let (addr, page_crossed) = cpu.get_operand_address(&mut memory, AddressingMode::Absolute);
         assert_eq!(addr, value);
         assert_eq!(page_crossed, false);
     }
@@ -1046,7 +1046,7 @@ mod tests {
         cpu.x = offset;
         memory.write_byte(0x00, 0x34);
         memory.write_byte(0x01, 0x12);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsoluteX);
+        let (addr, page_crossed) = cpu.get_operand_address(&mut memory, AddressingMode::AbsoluteX);
         assert_eq!(addr, 0x1239);
         assert_eq!(page_crossed, false);
     }
@@ -1059,7 +1059,7 @@ mod tests {
         cpu.x = offset;
         memory.write_byte(0x00, 0xFE);
         memory.write_byte(0x01, 0xFF);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsoluteX);
+        let (addr, page_crossed) = cpu.get_operand_address(&mut memory, AddressingMode::AbsoluteX);
         assert_eq!(addr, 0x0003);
         assert_eq!(page_crossed, true);
     }
@@ -1072,7 +1072,7 @@ mod tests {
         cpu.x = offset;
         memory.write_byte(0x00, 0xFE);
         memory.write_byte(0x01, 0x01);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsoluteX);
+        let (addr, page_crossed) = cpu.get_operand_address(&mut memory, AddressingMode::AbsoluteX);
         assert_eq!(addr, 0x0203);
         assert_eq!(page_crossed, true);
     }
@@ -1085,7 +1085,7 @@ mod tests {
         cpu.y = offset;
         memory.write_byte(0x00, 0x34);
         memory.write_byte(0x01, 0x12);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsoluteY);
+        let (addr, page_crossed) = cpu.get_operand_address(&mut memory, AddressingMode::AbsoluteY);
         assert_eq!(addr, 0x1239);
         assert_eq!(page_crossed, false);
     }
@@ -1098,7 +1098,7 @@ mod tests {
         cpu.y = offset;
         memory.write_byte(0x00, 0xFE);
         memory.write_byte(0x01, 0xFF);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsoluteY);
+        let (addr, page_crossed) = cpu.get_operand_address(&mut memory, AddressingMode::AbsoluteY);
         assert_eq!(addr, 0x0003);
         assert_eq!(page_crossed, true);
     }
@@ -1111,7 +1111,7 @@ mod tests {
         cpu.y = offset;
         memory.write_byte(0x00, 0xFE);
         memory.write_byte(0x01, 0x01);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::AbsoluteY);
+        let (addr, page_crossed) = cpu.get_operand_address(&mut memory, AddressingMode::AbsoluteY);
         assert_eq!(addr, 0x0203);
         assert_eq!(page_crossed, true);
     }
@@ -1125,7 +1125,7 @@ mod tests {
         memory.write_byte(0x01, 0x12);
         memory.write_byte(0x1234, 0x56);
         memory.write_byte(0x1235, 0x34);
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::Indirect);
+        let (addr, page_crossed) = cpu.get_operand_address(&mut memory, AddressingMode::Indirect);
         assert_eq!(addr, expected_addr);
         assert_eq!(page_crossed, false);
     }
@@ -1152,7 +1152,7 @@ mod tests {
         let expected_addr = 0x8956;
         memory.write_byte(zp_addr, zp_value);
 
-        let (addr, page_crossed) = cpu.get_operand_address(&memory, AddressingMode::Indirect);
+        let (addr, page_crossed) = cpu.get_operand_address(&mut memory, AddressingMode::Indirect);
         assert_eq!(addr, expected_addr);
         assert_eq!(page_crossed, false);
     }
@@ -1165,8 +1165,8 @@ mod tests {
         let second_value = 0xCD;
         sp.push_byte(&mut memory, first_value);
         sp.push_byte(&mut memory, second_value);
-        assert_eq!(sp.pop_byte(&memory), second_value);
-        assert_eq!(sp.pop_byte(&memory), first_value);
+        assert_eq!(sp.pop_byte(&mut memory), second_value);
+        assert_eq!(sp.pop_byte(&mut memory), first_value);
     }
 
     #[test]

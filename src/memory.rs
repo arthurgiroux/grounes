@@ -1,14 +1,15 @@
-use crate::mapper::{Mapper, MapperSource};
+use crate::{mapper::{Mapper, MapperSource}, ppu::PPU};
 use std::usize;
 
 pub trait MemoryBus {
-    fn read_byte(&self, addr: u16) -> u8;
+    fn read_byte(&mut self, addr: u16) -> u8;
     fn write_byte(&mut self, addr: u16, value: u8);
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MemoryRegion {
     Ram,
+    PPU,
     OpenBus,
     Cartridge,
 }
@@ -16,12 +17,12 @@ pub enum MemoryRegion {
 /// Pure address-to-region mapping. Returns (region, local_offset).
 /// Ram: 0x0000..0x2000 with mirroring (offset = addr % 2048).
 pub fn map_address(addr: u16) -> (MemoryRegion, u16) {
-    if addr <= 0x1FFF {
-        (MemoryRegion::Ram, addr % 2048)
-    } else if addr >= 0x4020 {
-        (MemoryRegion::Cartridge, addr)
-    } else {
-        (MemoryRegion::OpenBus, 0)
+    match addr {
+        0x0000..=0x1FFF => (MemoryRegion::Ram, addr % 2048),
+        // Mirrored after 0x2007
+        0x2000..=0x3FFF => (MemoryRegion::PPU, addr & 0x2007),
+        0x4020..=0xFFFF => (MemoryRegion::Cartridge, addr),
+        _ => (MemoryRegion::OpenBus, 0),
     }
 }
 
@@ -43,7 +44,7 @@ impl RAM {
 }
 
 impl MemoryBus for RAM {
-    fn read_byte(&self, addr: u16) -> u8 {
+    fn read_byte(&mut self, addr: u16) -> u8 {
         self.memory[addr as usize]
     }
 
@@ -55,14 +56,16 @@ impl MemoryBus for RAM {
 /// View over device(s) used at step time; implements MemoryBus using map_address.
 pub struct BusView<'a> {
     pub ram: &'a mut RAM,
+    pub ppu: &'a mut PPU,
     pub mapper: &'a mut dyn Mapper,
 }
 
 impl MemoryBus for BusView<'_> {
-    fn read_byte(&self, addr: u16) -> u8 {
+    fn read_byte(&mut self, addr: u16) -> u8 {
         let (region, offset) = map_address(addr);
         match region {
             MemoryRegion::Ram => self.ram.read_byte(offset),
+            MemoryRegion::PPU => self.ppu.read_byte(offset),
             MemoryRegion::Cartridge => self.mapper.read_byte(MapperSource::CPU, offset),
             MemoryRegion::OpenBus => 0,
         }
@@ -70,11 +73,11 @@ impl MemoryBus for BusView<'_> {
 
     fn write_byte(&mut self, addr: u16, value: u8) {
         let (region, offset) = map_address(addr);
-        if let MemoryRegion::Ram = region {
-            self.ram.write_byte(offset, value);
-        }
-        if let MemoryRegion::Cartridge = region {
-            self.mapper.write_byte(MapperSource::CPU, offset, value);
+        match region {
+            MemoryRegion::Ram => self.ram.write_byte(offset, value),
+            MemoryRegion::Cartridge => self.mapper.write_byte(MapperSource::CPU, offset, value),
+            MemoryRegion::PPU => self.ppu.write_byte(addr, value),
+            _ => {}
         }
     }
 }

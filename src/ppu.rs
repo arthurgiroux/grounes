@@ -117,7 +117,7 @@ impl Default for PPU {
 }
 
 impl PPU {
-    fn read_byte(&mut self, addr: u16) -> u8 {
+    pub fn read_byte(&mut self, addr: u16) -> u8 {
         match addr & 0x2007 {
             ppu_reg::DATA => {
                 let value = self.vram_read_buffer;
@@ -142,7 +142,7 @@ impl PPU {
         }
     }
 
-    fn write_byte(&mut self, addr: u16, value: u8) {
+    pub fn write_byte(&mut self, addr: u16, value: u8) {
         match addr & 0x2007 {
             ppu_reg::CONTROL => {
                 self.ppu_control.update(value);
