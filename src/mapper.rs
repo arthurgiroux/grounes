@@ -30,7 +30,10 @@ impl Mapper for Mapper0 {
         let address = addr as usize;
         let value = match source {
             // PPU $0000-$1FFF: 8 KiB CHR-ROM.
-            MapperSource::PPU => self.ines.chr_rom.as_deref().unwrap_or(&[]).get(address),
+            MapperSource::PPU => match addr {
+                0x0000..=0x1FFF => self.ines.chr_rom.as_deref().unwrap_or(&[]).get(address),
+                _ => None,
+            },
             MapperSource::CPU => {
                 // CPU $6000-$7FFF: Unbanked PRG-RAM, mirrored as necessary to fill entire 8 KiB window, write protectable with an external switch. (Family BASIC only)
                 if addr >= 0x6000 && addr <= 0x7FFF {
