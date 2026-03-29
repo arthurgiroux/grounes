@@ -1,7 +1,10 @@
 mod ppu_control;
 mod ppu_mask;
 
-use crate::ppu::{ppu_control::PPUControl, ppu_mask::PPUMask};
+use crate::{
+    mapper::Mapper,
+    ppu::{ppu_control::PPUControl, ppu_mask::PPUMask},
+};
 
 use bitflags::bitflags;
 
@@ -70,6 +73,7 @@ pub struct PPU {
     oam: Vec<u8>,
     oam_address: u8,
     status: PPUStatus,
+    palette: Vec<u8>,
 }
 
 impl PPU {
@@ -112,20 +116,50 @@ impl Default for PPU {
             oam: vec![0u8; 256],
             oam_address: 0,
             status: PPUStatus::from_bits_truncate(0),
+            palette: vec![0u8; 32],
         }
     }
 }
 
 impl PPU {
-    pub fn read_byte(&mut self, addr: u16) -> u8 {
-        match addr & 0x2007 {
-            ppu_reg::DATA => {
+    fn read_byte_ppu(&mut self, mapper: &mut dyn Mapper, addr: u16) -> u8 {
+        match addr {
+            0x0000..=0x1FFF => mapper.read_byte(crate::mapper::MapperSource::PPU, addr),
+            0x2000..=0x3EFF => {
                 let value = self.vram_read_buffer;
-                self.vram_read_buffer = self
-                    .vram
-                    .get(self.vram_address as usize)
-                    .copied()
-                    .unwrap_or(0);
+                let offset = (addr - 0x2000) & (self.vram.len() as u16 - 1);
+                self.vram_read_buffer = self.vram[offset as usize];
+                value
+            }
+            0x3F00..=0x3FFF => {
+                let offset = (addr - 0x3F00) & (self.palette.len() as u16 - 1);
+                self.palette[offset as usize]
+            }
+            _ => panic!("Requested address outside of PPU address space."),
+        }
+    }
+
+    fn write_byte_ppu(&mut self, mapper: &mut dyn Mapper, addr: u16, value: u8) {
+        match addr {
+            0x0000..=0x1FFF => {
+                mapper.write_byte(crate::mapper::MapperSource::PPU, addr, value);
+            }
+            0x2000..=0x3EFF => {
+                let offset = (addr - 0x2000) & (self.vram.len() as u16 - 1);
+                self.vram[offset as usize] = value;
+            }
+            0x3F00..=0x3FFF => {
+                let offset = (addr - 0x3F00) & (self.palette.len() as u16 - 1);
+                self.palette[offset as usize] = value;
+            }
+            _ => panic!("Requested address outside of PPU address space."),
+        }
+    }
+
+    pub fn read_byte(&mut self, mapper: &mut dyn Mapper, addr: u16) -> u8 {
+        match addr {
+            ppu_reg::DATA => {
+                let value = self.read_byte_ppu(mapper, self.vram_address);
                 self.vram_address = self
                     .vram_address
                     .wrapping_add(self.ppu_control.get_vram_address_increment());
@@ -142,8 +176,8 @@ impl PPU {
         }
     }
 
-    pub fn write_byte(&mut self, addr: u16, value: u8) {
-        match addr & 0x2007 {
+    pub fn write_byte(&mut self, mapper: &mut dyn Mapper, addr: u16, value: u8) {
+        match addr {
             ppu_reg::CONTROL => {
                 self.ppu_control.update(value);
                 self.scroll_x = (self.scroll_x & 0b11111110) | (value & 0x01);
@@ -156,9 +190,7 @@ impl PPU {
                 self.update_vram_address(value);
             }
             ppu_reg::DATA => {
-                if let Some(item) = self.vram.get_mut(self.vram_address as usize) {
-                    *item = value;
-                }
+                self.write_byte_ppu(mapper, self.vram_address, value);
                 self.vram_address = self
                     .vram_address
                     .wrapping_add(self.ppu_control.get_vram_address_increment());

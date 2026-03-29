@@ -1,4 +1,7 @@
-use crate::{mapper::{Mapper, MapperSource}, ppu::PPU};
+use crate::{
+    mapper::{Mapper, MapperSource},
+    ppu::PPU,
+};
 use std::usize;
 
 pub trait MemoryBus {
@@ -65,7 +68,7 @@ impl MemoryBus for BusView<'_> {
         let (region, offset) = map_address(addr);
         match region {
             MemoryRegion::Ram => self.ram.read_byte(offset),
-            MemoryRegion::PPU => self.ppu.read_byte(offset),
+            MemoryRegion::PPU => self.ppu.read_byte(self.mapper, offset),
             MemoryRegion::Cartridge => self.mapper.read_byte(MapperSource::CPU, offset),
             MemoryRegion::OpenBus => 0,
         }
@@ -76,7 +79,7 @@ impl MemoryBus for BusView<'_> {
         match region {
             MemoryRegion::Ram => self.ram.write_byte(offset, value),
             MemoryRegion::Cartridge => self.mapper.write_byte(MapperSource::CPU, offset, value),
-            MemoryRegion::PPU => self.ppu.write_byte(addr, value),
+            MemoryRegion::PPU => self.ppu.write_byte(self.mapper, offset, value),
             _ => {}
         }
     }
