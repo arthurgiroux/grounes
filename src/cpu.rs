@@ -8,8 +8,13 @@ pub use instruction::Instruction;
 pub use opcode::OpCode;
 pub use status_register::StatusRegister;
 
-use crate::memory::{MemoryBus, is_memory_page_crossed};
+use crate::{
+    memory::{MemoryBus, is_memory_page_crossed},
+    ppu::ppu_reg,
+};
 use std::fmt;
+
+pub const OAM_DMA: u16 = 0x4014;
 
 #[derive(Debug)]
 pub struct CPU {
@@ -60,6 +65,13 @@ pub struct CPU {
     /// Some changes to the InterruptDisabled flag are delayed to the next cycle,
     /// We keep track of any pending change that needs to be performed.
     pending_interrupt_flag_change: Option<bool>,
+
+    /// An OAM DMA is triggered by writing to a register and will block the CPU
+    /// To transfer a chunk of data
+    pending_dma: Option<u8>,
+
+    /// The total number of cycles since the CPU was started
+    cycle_count: u64,
 }
 
 impl fmt::Display for CPU {
@@ -133,7 +145,7 @@ impl StackPointer {
 
 pub struct StepResult {
     pub opcode: Option<OpCode>,
-    pub cycles: u8,
+    pub cycles: u16,
 }
 
 impl Default for StackPointer {
@@ -159,6 +171,11 @@ impl CPU {
             sp: StackPointer { value: 0xFD },
             p: StatusRegister::InterruptDisabled | StatusRegister::Unused,
             pending_interrupt_flag_change: None,
+            pending_dma: None,
+            // The CPU executes 7 cycles during the reset sequence before the first user instruction runs.
+            // These cycles are used to push the return address and processor status to the stack,
+            // then load the reset vector from 0xFFFC/0xFFFD into the PC.
+            cycle_count: 7,
         }
     }
 
@@ -314,11 +331,34 @@ impl CPU {
             Instruction::NOP => matches!(&operand, Some(Operand::Memory(_, true))).then_some(1),
         };
 
-        let cycles = opcode.base_cycle + extra_cycles.unwrap_or_default();
+        let mut cycles = opcode.base_cycle as u16 + extra_cycles.unwrap_or_default() as u16;
+
+        let dma_cycles: u16 = if let Some(page) = self.pending_dma.take() {
+            // The source page is always page-aligned
+            let base = (page as u16) << 8;
+            // DMA always copies 256 bytes
+            for i in 0u16..256 {
+                let byte = memory.read_byte(base | i);
+                memory.write_byte(ppu_reg::OAM_DATA, byte);
+            }
+            // The number of cycles it took (513 or 514) depends on if the total CPU cycle is odd or even
+            let alignment: u16 = if (self.cycle_count + cycles as u64) % 2 == 1 {
+                1
+            } else {
+                0
+            };
+            513 + alignment
+        } else {
+            0
+        };
+
+        cycles += dma_cycles;
+
+        self.cycle_count += cycles as u64;
 
         StepResult {
             opcode: Some(opcode),
-            cycles,
+            cycles: cycles,
         }
     }
 
@@ -333,6 +373,14 @@ impl CPU {
         let high = memory.read_byte(self.pc + 1);
         self.pc += 2;
         u16::from_le_bytes([low, high])
+    }
+
+    fn mem_write<T: MemoryBus>(&mut self, memory: &mut T, addr: u16, value: u8) {
+        if addr == OAM_DMA {
+            self.pending_dma = Some(value);
+        } else {
+            memory.write_byte(addr, value);
+        }
     }
 
     fn resolve_operand<T: MemoryBus>(
@@ -481,7 +529,7 @@ impl CPU {
         match operand {
             Operand::Memory(addr, _) => {
                 let value = memory.read_byte(addr).wrapping_add(1);
-                memory.write_byte(addr, value);
+                self.mem_write(memory, addr, value);
                 self.p.update_zero_flag(value);
                 self.p.update_negative_flag(value);
             }
@@ -495,7 +543,7 @@ impl CPU {
         match operand {
             Operand::Memory(addr, _) => {
                 let value = memory.read_byte(addr).wrapping_sub(1);
-                memory.write_byte(addr, value);
+                self.mem_write(memory, addr, value);
                 self.p.update_zero_flag(value);
                 self.p.update_negative_flag(value);
             }
@@ -589,7 +637,7 @@ impl CPU {
             Operand::Accumulator => {
                 self.a = shifted_value;
             }
-            Operand::Memory(addr, _) => memory.write_byte(addr, shifted_value),
+            Operand::Memory(addr, _) => self.mem_write(memory, addr, shifted_value),
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
@@ -614,7 +662,7 @@ impl CPU {
             Operand::Accumulator => {
                 self.a = shifted_value;
             }
-            Operand::Memory(addr, _) => memory.write_byte(addr, shifted_value),
+            Operand::Memory(addr, _) => self.mem_write(memory, addr, shifted_value),
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
@@ -637,7 +685,7 @@ impl CPU {
             Operand::Accumulator => {
                 self.a = shifted_value;
             }
-            Operand::Memory(addr, _) => memory.write_byte(addr, shifted_value),
+            Operand::Memory(addr, _) => self.mem_write(memory, addr, shifted_value),
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
@@ -661,7 +709,7 @@ impl CPU {
             Operand::Accumulator => {
                 self.a = shifted_value;
             }
-            Operand::Memory(addr, _) => memory.write_byte(addr, shifted_value),
+            Operand::Memory(addr, _) => self.mem_write(memory, addr, shifted_value),
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         };
 
@@ -695,7 +743,7 @@ impl CPU {
         match operand {
             Operand::Memory(addr, _) => {
                 let value = self.get_register(register);
-                memory.write_byte(addr, value);
+                self.mem_write(memory, addr, value);
             }
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         }
@@ -713,7 +761,7 @@ impl CPU {
             Operand::Memory(addr, _) => {
                 let value1 = self.get_register(register1);
                 let value2 = self.get_register(register2);
-                memory.write_byte(addr, value1 & value2);
+                self.mem_write(memory, addr, value1 & value2);
             }
             _ => panic!("Unsupported operand {operand:?} for this instruction"),
         }
@@ -1194,5 +1242,93 @@ mod tests {
         // Interrupt disabled should be set, pending should be cleared
         assert!(cpu.p.contains(StatusRegister::InterruptDisabled));
         assert_eq!(cpu.pending_interrupt_flag_change, None);
+    }
+
+    // OAM DMA
+
+    struct DmaTrackingMemory {
+        memory: Vec<u8>,
+        oam_writes: Vec<u8>,
+    }
+
+    impl DmaTrackingMemory {
+        fn new() -> Self {
+            DmaTrackingMemory {
+                memory: vec![0; 0x10000],
+                oam_writes: Vec::new(),
+            }
+        }
+    }
+
+    impl MemoryBus for DmaTrackingMemory {
+        fn read_byte(&mut self, addr: u16) -> u8 {
+            self.memory[addr as usize]
+        }
+
+        fn write_byte(&mut self, addr: u16, value: u8) {
+            if addr == 0x2004 {
+                self.oam_writes.push(value);
+            } else {
+                self.memory[addr as usize] = value;
+            }
+        }
+    }
+
+    fn setup_sta_abs(memory: &mut impl MemoryBus, pc: u16, target: u16) {
+        memory.write_byte(pc, 0x8D);
+        memory.write_byte(pc + 1, (target & 0xFF) as u8);
+        memory.write_byte(pc + 2, (target >> 8) as u8);
+    }
+
+    #[test]
+    fn oam_dma_should_copy_source_page_to_oam_data() {
+        let mut memory = DmaTrackingMemory::new();
+        let mut cpu = CPU::new();
+        setup_sta_abs(&mut memory, 0x0200, 0x4014);
+        cpu.pc = 0x0200;
+        cpu.a = 0x05; // source page 0x05xx
+        for i in 0u16..256 {
+            memory.memory[0x0500 + i as usize] = i as u8;
+        }
+        cpu.step(&mut memory);
+        assert_eq!(memory.oam_writes.len(), 256);
+        for i in 0..256 {
+            assert_eq!(memory.oam_writes[i], i as u8);
+        }
+    }
+
+    #[test]
+    fn oam_dma_should_stall_514_cycles_on_odd_cycle_count() {
+        // cycle_count starts at 7; STA abs = 4 cycles; 7 + 4 = 11 (odd) -> 514 stall
+        let mut memory = DmaTrackingMemory::new();
+        let mut cpu = CPU::new();
+        setup_sta_abs(&mut memory, 0x0200, 0x4014);
+        cpu.pc = 0x0200;
+        let result = cpu.step(&mut memory);
+        assert_eq!(result.cycles, 4 + 514);
+    }
+
+    #[test]
+    fn oam_dma_should_stall_513_cycles_on_even_cycle_count() {
+        // Set cycle_count to 8; 8 + 4 = 12 (even) -> 513 stall
+        let mut memory = DmaTrackingMemory::new();
+        let mut cpu = CPU::new();
+        cpu.cycle_count = 8;
+        setup_sta_abs(&mut memory, 0x0200, 0x4014);
+        cpu.pc = 0x0200;
+        let result = cpu.step(&mut memory);
+        assert_eq!(result.cycles, 4 + 513);
+    }
+
+    #[test]
+    fn oam_dma_should_not_trigger_for_regular_stores() {
+        let mut memory = MockMemory::new();
+        let mut cpu = CPU::new();
+        setup_sta_abs(&mut memory, 0x0200, 0x0300);
+        cpu.pc = 0x0200;
+        cpu.a = 0x42;
+        let result = cpu.step(&mut memory);
+        assert_eq!(result.cycles, 4); // no DMA stall
+        assert_eq!(memory.read_byte(0x0300), 0x42);
     }
 }

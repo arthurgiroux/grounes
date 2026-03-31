@@ -26,7 +26,6 @@ pub mod ppu_reg {
     pub const SCROLL: u16 = 0x2005;
     pub const ADDR: u16 = 0x2006;
     pub const DATA: u16 = 0x2007;
-    pub const OAM_DMA: u16 = 0x4014;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
