@@ -210,3 +210,292 @@ impl PPU {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mapper::MapperSource;
+
+    struct MockMapper {
+        data: Vec<u8>,
+    }
+
+    impl MockMapper {
+        fn new() -> Self {
+            MockMapper {
+                data: vec![0u8; 0x2000],
+            }
+        }
+    }
+
+    impl crate::mapper::Mapper for MockMapper {
+        fn read_byte(&self, _source: MapperSource, addr: u16) -> u8 {
+            self.data[addr as usize]
+        }
+
+        fn write_byte(&mut self, _source: MapperSource, addr: u16, value: u8) {
+            self.data[addr as usize] = value;
+        }
+    }
+
+    // WriteLatch
+
+    #[test]
+    fn write_latch_toggle_should_switch_location() {
+        let mut latch = WriteLatch::default();
+        assert_eq!(latch.location, WriteLocation::First);
+        latch.toggle();
+        assert_eq!(latch.location, WriteLocation::Second);
+        latch.toggle();
+        assert_eq!(latch.location, WriteLocation::First);
+    }
+
+    #[test]
+    fn write_latch_clear_should_reset_to_first() {
+        let mut latch = WriteLatch::default();
+        latch.toggle();
+        assert_eq!(latch.location, WriteLocation::Second);
+        latch.clear();
+        assert_eq!(latch.location, WriteLocation::First);
+    }
+
+    // update_vram_address
+
+    #[test]
+    fn update_vram_address_first_write_should_set_high_byte() {
+        let mut ppu = PPU::default();
+        ppu.update_vram_address(0x20);
+        assert_eq!(ppu.vram_address, 0x2000);
+    }
+
+    #[test]
+    fn update_vram_address_two_writes_should_set_full_address() {
+        let mut ppu = PPU::default();
+        ppu.update_vram_address(0x21);
+        ppu.update_vram_address(0x50);
+        assert_eq!(ppu.vram_address, 0x2150);
+    }
+
+    #[test]
+    fn update_vram_address_high_byte_should_be_masked_to_6_bits() {
+        let mut ppu = PPU::default();
+        ppu.update_vram_address(0xFF);
+        assert_eq!(ppu.vram_address, 0x3F00);
+    }
+
+    // update_scroll
+
+    #[test]
+    fn update_scroll_first_write_should_set_scroll_x() {
+        let mut ppu = PPU::default();
+        ppu.update_scroll(0xAA);
+        assert_eq!(ppu.scroll_x, 0xAA);
+    }
+
+    #[test]
+    fn update_scroll_second_write_should_set_scroll_y() {
+        let mut ppu = PPU::default();
+        ppu.update_scroll(0x00);
+        ppu.update_scroll(0xAA);
+        assert_eq!(ppu.scroll_y, 0xAA);
+    }
+
+    #[test]
+    fn update_scroll_should_preserve_scroll_x_lsb() {
+        let mut ppu = PPU::default();
+        ppu.scroll_x = 0x01;
+        // 0xAB has bit 0 set, but update_scroll masks it out and preserves the existing LSB
+        ppu.update_scroll(0xAB);
+        assert_eq!(ppu.scroll_x, 0xAB); // 0xAA | preserved LSB 0x01 = 0xAB
+    }
+
+    // read_byte STATUS
+
+    #[test]
+    fn read_status_should_return_status_bits() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.status.insert(PPUStatus::VBlank);
+        let value = ppu.read_byte(&mut mapper, ppu_reg::STATUS);
+        assert_eq!(value & PPUStatus::VBlank.bits(), PPUStatus::VBlank.bits());
+    }
+
+    #[test]
+    fn read_status_should_clear_vblank_flag() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.status.insert(PPUStatus::VBlank);
+        ppu.read_byte(&mut mapper, ppu_reg::STATUS);
+        assert!(!ppu.status.contains(PPUStatus::VBlank));
+    }
+
+    #[test]
+    fn read_status_should_reset_write_latch() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.write_byte(&mut mapper, ppu_reg::ADDR, 0x21);
+        assert_eq!(ppu.write_latch.location, WriteLocation::Second);
+        ppu.read_byte(&mut mapper, ppu_reg::STATUS);
+        assert_eq!(ppu.write_latch.location, WriteLocation::First);
+    }
+
+    // read_byte OAM_DATA
+
+    #[test]
+    fn read_oam_data_should_return_byte_at_oam_address() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.oam[0x10] = 0xBE;
+        ppu.oam_address = 0x10;
+        assert_eq!(ppu.read_byte(&mut mapper, ppu_reg::OAM_DATA), 0xBE);
+    }
+
+    // read_byte DATA
+
+    #[test]
+    fn read_data_should_return_buffered_value() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.vram_address = 0x2000;
+        ppu.vram[0] = 0xAB;
+        // First read returns old buffer (empty)
+        assert_eq!(ppu.read_byte(&mut mapper, ppu_reg::DATA), 0x00);
+        // Second read returns the value that was loaded into the buffer
+        assert_eq!(ppu.read_byte(&mut mapper, ppu_reg::DATA), 0xAB);
+    }
+
+    #[test]
+    fn read_data_should_increment_vram_address_by_1() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.vram_address = 0x2000;
+        ppu.read_byte(&mut mapper, ppu_reg::DATA);
+        assert_eq!(ppu.vram_address, 0x2001);
+    }
+
+    #[test]
+    fn read_data_should_increment_vram_address_by_32_when_control_bit_set() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.write_byte(&mut mapper, ppu_reg::CONTROL, 0x04);
+        ppu.vram_address = 0x2000;
+        ppu.read_byte(&mut mapper, ppu_reg::DATA);
+        assert_eq!(ppu.vram_address, 0x2020);
+    }
+
+    // write_byte CONTROL
+
+    #[test]
+    fn write_control_should_update_ppu_control() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.write_byte(&mut mapper, ppu_reg::CONTROL, 0x80);
+        assert!(ppu.ppu_control.is_vblank_nmi_enabled());
+    }
+
+    #[test]
+    fn write_control_should_set_scroll_x_lsb() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.write_byte(&mut mapper, ppu_reg::CONTROL, 0x01);
+        assert_eq!(ppu.scroll_x & 0x01, 0x01);
+    }
+
+    #[test]
+    fn write_control_should_set_scroll_y_lsb() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.write_byte(&mut mapper, ppu_reg::CONTROL, 0x02);
+        assert_eq!(ppu.scroll_y & 0x01, 0x01);
+    }
+
+    // write_byte MASK
+
+    #[test]
+    fn write_mask_should_update_ppu_mask() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.write_byte(&mut mapper, ppu_reg::MASK, 0x01);
+        assert!(ppu.ppu_mask.is_greyscale());
+    }
+
+    // write_byte ADDR + DATA
+
+    #[test]
+    fn write_addr_two_writes_should_set_vram_address() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.write_byte(&mut mapper, ppu_reg::ADDR, 0x21);
+        ppu.write_byte(&mut mapper, ppu_reg::ADDR, 0x00);
+        ppu.write_byte(&mut mapper, ppu_reg::DATA, 0xAB);
+        assert_eq!(ppu.vram[0x0100], 0xAB);
+    }
+
+    #[test]
+    fn write_data_should_auto_increment_address_by_1() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.vram_address = 0x2000;
+        ppu.write_byte(&mut mapper, ppu_reg::DATA, 0x01);
+        ppu.write_byte(&mut mapper, ppu_reg::DATA, 0x02);
+        assert_eq!(ppu.vram_address, 0x2002);
+    }
+
+    #[test]
+    fn write_data_should_auto_increment_address_by_32_when_control_bit_set() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.write_byte(&mut mapper, ppu_reg::CONTROL, 0x04);
+        ppu.vram_address = 0x2000;
+        ppu.write_byte(&mut mapper, ppu_reg::DATA, 0x01);
+        assert_eq!(ppu.vram_address, 0x2020);
+    }
+
+    // write_byte SCROLL
+
+    #[test]
+    fn write_scroll_first_write_should_set_scroll_x() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.write_byte(&mut mapper, ppu_reg::SCROLL, 0xAA);
+        assert_eq!(ppu.scroll_x, 0xAA);
+    }
+
+    #[test]
+    fn write_scroll_second_write_should_set_scroll_y() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.write_byte(&mut mapper, ppu_reg::SCROLL, 0x00);
+        ppu.write_byte(&mut mapper, ppu_reg::SCROLL, 0xAA);
+        assert_eq!(ppu.scroll_y, 0xAA);
+    }
+
+    // write_byte OAM_ADDR + OAM_DATA
+
+    #[test]
+    fn write_oam_addr_should_set_oam_address() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.write_byte(&mut mapper, ppu_reg::OAM_ADDR, 0x10);
+        assert_eq!(ppu.oam_address, 0x10);
+    }
+
+    #[test]
+    fn write_oam_data_should_write_to_oam_and_increment_address() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.write_byte(&mut mapper, ppu_reg::OAM_ADDR, 0x05);
+        ppu.write_byte(&mut mapper, ppu_reg::OAM_DATA, 0xBE);
+        assert_eq!(ppu.oam[0x05], 0xBE);
+        assert_eq!(ppu.oam_address, 0x06);
+    }
+
+    #[test]
+    fn write_oam_data_should_wrap_oam_address() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        ppu.write_byte(&mut mapper, ppu_reg::OAM_ADDR, 0xFF);
+        ppu.write_byte(&mut mapper, ppu_reg::OAM_DATA, 0x00);
+        assert_eq!(ppu.oam_address, 0x00);
+    }
+}
