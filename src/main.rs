@@ -24,6 +24,7 @@ struct GrounesApp {
     load_error: Option<String>,
     show_debug_panel: bool,
     memory_editor: MemoryEditor,
+    chr_texture: Option<egui::TextureHandle>,
 }
 
 impl GrounesApp {
@@ -42,8 +43,40 @@ impl GrounesApp {
                 .with_address_range("PPU", 0x2000..0x4000)
                 .with_address_range("APU", 0x4000..0x401F)
                 .with_address_range("Cartridge", 0x4020..0xFFFF),
+            chr_texture: None,
         }
     }
+}
+
+fn decode_pattern_table(chr: &[u8]) -> egui::ColorImage {
+    const W: usize = 128;
+    const H: usize = 128;
+    let mut pixels = vec![egui::Color32::BLACK; W * H];
+
+    // Pattern table is a 16x16 table of tiles
+    for tile in 0..256usize {
+        let tile_x = (tile % 16) * 8;
+        let tile_y = (tile / 16) * 8;
+        let base = tile * 16;
+
+        for row in 0..8usize {
+            let lo = chr.get(base + row).copied().unwrap_or(0);
+            let hi = chr.get(base + row + 8).copied().unwrap_or(0);
+            for col in 0..8usize {
+                let bit = 7 - col;
+                let value = ((lo >> bit) & 1) | (((hi >> bit) & 1) << 1);
+                let color = match value {
+                    0 => egui::Color32::BLACK,
+                    1 => egui::Color32::DARK_GRAY,
+                    2 => egui::Color32::LIGHT_GRAY,
+                    _ => egui::Color32::WHITE,
+                };
+                pixels[(tile_y + row) * W + (tile_x + col)] = color;
+            }
+        }
+    }
+
+    egui::ColorImage::new([W, H], pixels)
 }
 
 fn format_step(result: &StepResult) -> String {
@@ -166,6 +199,29 @@ impl eframe::App for GrounesApp {
                                             ui.monospace(entry);
                                         }
                                     });
+                            });
+
+                        // Pattern Tables
+                        egui::CollapsingHeader::new("Pattern Tables")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                if let Some(chr) = self.emulator.chr_rom() {
+                                    let image = decode_pattern_table(chr);
+                                    let texture = self.chr_texture.get_or_insert_with(|| {
+                                        ctx.load_texture(
+                                            "chr_pattern_table",
+                                            image.clone(),
+                                            egui::TextureOptions::NEAREST,
+                                        )
+                                    });
+                                    texture.set(image, egui::TextureOptions::NEAREST);
+                                    ui.add(
+                                        egui::Image::new(&*texture)
+                                            .fit_to_exact_size(egui::vec2(256.0, 256.0)),
+                                    );
+                                } else {
+                                    ui.label("No CHR ROM");
+                                }
                             });
 
                         // Memory View

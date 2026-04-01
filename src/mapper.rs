@@ -18,6 +18,9 @@ pub enum MapperSource {
 pub trait Mapper {
     fn read_byte(&self, source: MapperSource, addr: u16) -> u8;
     fn write_byte(&mut self, source: MapperSource, addr: u16, value: u8);
+    fn chr_rom(&self) -> Option<&[u8]> {
+        None
+    }
 }
 
 /// Mapper 0 (NROM), see: https://www.nesdev.org/wiki/INES_Mapper_000
@@ -87,5 +90,9 @@ impl Mapper for Mapper0 {
                 // CHR-ROM, writes ignored on NROM
             }
         }
+    }
+
+    fn chr_rom(&self) -> Option<&[u8]> {
+        self.ines.chr_rom.as_deref()
     }
 }

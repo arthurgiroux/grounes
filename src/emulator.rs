@@ -60,4 +60,8 @@ impl Emulator {
             ppu: &mut self.ppu,
         }
     }
+
+    pub fn chr_rom(&self) -> Option<&[u8]> {
+        self.mapper.as_deref()?.chr_rom()
+    }
 }
