@@ -208,6 +208,8 @@ impl PPU {
             _ => {}
         }
     }
+
+    pub fn step(&mut self) {}
 }
 
 #[cfg(test)]
