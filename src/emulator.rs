@@ -45,7 +45,13 @@ impl Emulator {
             mapper: mapper.as_mut(),
             ppu: &mut self.ppu,
         };
-        self.cpu.step(&mut view)
+        let result = self.cpu.step(&mut view);
+        let ppu_cycles = result.cycles * 3;
+        for _ in 0..ppu_cycles {
+            self.ppu.step();
+        }
+
+        result
     }
 
     pub fn set_pc(&mut self, value: u16) {
