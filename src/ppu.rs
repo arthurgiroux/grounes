@@ -73,6 +73,7 @@ pub struct PPU {
     oam_address: u8,
     status: PPUStatus,
     palette: Vec<u8>,
+    scanline: u32,
 }
 
 impl PPU {
@@ -116,6 +117,7 @@ impl Default for PPU {
             oam_address: 0,
             status: PPUStatus::from_bits_truncate(0),
             palette: vec![0u8; 32],
+            scanline: 0,
         }
     }
 }
