@@ -29,6 +29,16 @@ pub mod ppu_reg {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScanlineRendererState {
+    PreRender,
+    VisibleScanline,
+    PostRender,
+    Vblank,
+}
+
+const SCANLINE_CYCLE_DURATION: u32 = 341;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WriteLocation {
     First,
     Second,
@@ -74,6 +84,8 @@ pub struct PPU {
     status: PPUStatus,
     palette: Vec<u8>,
     scanline: u32,
+    current_state_cycles: u32,
+    current_state: ScanlineRendererState,
 }
 
 impl PPU {
@@ -117,7 +129,9 @@ impl Default for PPU {
             oam_address: 0,
             status: PPUStatus::from_bits_truncate(0),
             palette: vec![0u8; 32],
-            scanline: 0,
+            scanline: 261,
+            current_state_cycles: 0,
+            current_state: ScanlineRendererState::PreRender,
         }
     }
 }
@@ -211,7 +225,40 @@ impl PPU {
         }
     }
 
-    pub fn step(&mut self) {}
+    pub fn step(&mut self) {
+        match self.get_state() {
+            ScanlineRendererState::PreRender => {
+                // TODO
+            }
+            ScanlineRendererState::VisibleScanline => {
+                // TODO
+            }
+            ScanlineRendererState::PostRender => {
+                // TODO
+            }
+            ScanlineRendererState::Vblank => {
+                if self.scanline == 241 && self.current_state_cycles == 1 {
+                    self.status.insert(PPUStatus::VBlank);
+                }
+            }
+        }
+
+        self.current_state_cycles += 1;
+        if (self.current_state_cycles == SCANLINE_CYCLE_DURATION) {
+            self.current_state_cycles = 0;
+            self.scanline = (self.scanline + 1) % 261;
+        }
+    }
+
+    fn get_state(&self) -> ScanlineRendererState {
+        match self.scanline {
+            261 => ScanlineRendererState::PreRender,
+            0..=239 => ScanlineRendererState::VisibleScanline,
+            240 => ScanlineRendererState::PostRender,
+            241..=260 => ScanlineRendererState::Vblank,
+            _ => panic!("Scanline value not handled"),
+        }
+    }
 }
 
 #[cfg(test)]
