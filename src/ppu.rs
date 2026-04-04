@@ -85,10 +85,14 @@ pub struct PPU {
     palette: Vec<u8>,
     scanline: u32,
     current_state_cycles: u32,
-    current_state: ScanlineRendererState,
+    frame: Vec<u8>,
 }
 
 impl PPU {
+    pub const IMG_HEIGHT: usize = 240;
+    pub const IMG_WIDTH: usize = 256;
+    pub const IMG_BPP: usize = 3;
+
     fn update_vram_address(&mut self, value: u8) {
         match self.write_latch.location {
             WriteLocation::First => {
@@ -131,7 +135,7 @@ impl Default for PPU {
             palette: vec![0u8; 32],
             scanline: 261,
             current_state_cycles: 0,
-            current_state: ScanlineRendererState::PreRender,
+            frame: vec![0u8; PPU::IMG_HEIGHT * PPU::IMG_WIDTH * PPU::IMG_BPP],
         }
     }
 }
@@ -183,7 +187,7 @@ impl PPU {
             ppu_reg::OAM_DATA => self.oam[self.oam_address as usize],
             ppu_reg::STATUS => {
                 let value = self.status.bits();
-                self.status.set(PPUStatus::VBlank, false);
+                self.status.remove(PPUStatus::VBlank);
                 self.write_latch.clear();
                 value
             }
@@ -228,9 +232,18 @@ impl PPU {
     pub fn step(&mut self) {
         match self.get_state() {
             ScanlineRendererState::PreRender => {
+                if self.current_state_cycles == 1 {
+                    self.status.remove(PPUStatus::VBlank);
+                }
+
                 // TODO
             }
             ScanlineRendererState::VisibleScanline => {
+                // This is just dummy pixels for now
+                let pix_id = self.current_state_cycles as usize / 8;
+                let start_addr = (self.scanline as usize * PPU::IMG_WIDTH + pix_id) * PPU::IMG_BPP;
+                self.frame[start_addr] = pix_id as u8; // red is pixel id
+                self.frame[start_addr + 1] = self.scanline as u8; // green is scanline number
                 // TODO
             }
             ScanlineRendererState::PostRender => {
