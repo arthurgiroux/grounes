@@ -85,7 +85,8 @@ pub struct PPU {
     palette: Vec<u8>,
     scanline: u32,
     current_state_cycles: u32,
-    frame: Vec<u8>,
+    frame_number: u32,
+    pub frame: Vec<u8>,
 }
 
 impl PPU {
@@ -134,6 +135,7 @@ impl Default for PPU {
             status: PPUStatus::from_bits_truncate(0),
             palette: vec![0u8; 32],
             scanline: 261,
+            frame_number: 0,
             current_state_cycles: 0,
             frame: vec![0u8; PPU::IMG_HEIGHT * PPU::IMG_WIDTH * PPU::IMG_BPP],
         }
@@ -239,15 +241,20 @@ impl PPU {
                 // TODO
             }
             ScanlineRendererState::VisibleScanline => {
-                // This is just dummy pixels for now
-                let pix_id = self.current_state_cycles as usize / 8;
-                let start_addr = (self.scanline as usize * PPU::IMG_WIDTH + pix_id) * PPU::IMG_BPP;
-                self.frame[start_addr] = pix_id as u8; // red is pixel id
-                self.frame[start_addr + 1] = self.scanline as u8; // green is scanline number
+                if self.current_state_cycles >= 1 && self.current_state_cycles <= 256 {
+                    // This is just dummy pixels for now
+                    let pix_id = (self.current_state_cycles - 1) as usize;
+                    let start_addr =
+                        (self.scanline as usize * PPU::IMG_WIDTH + pix_id) * PPU::IMG_BPP;
+                    self.frame[start_addr] = pix_id as u8; // red is pixel id
+                    self.frame[start_addr + 1] = self.scanline as u8; // green is scanline number
+                    self.frame[start_addr + 2] = self.frame_number as u8;
+                }
                 // TODO
             }
             ScanlineRendererState::PostRender => {
                 // TODO
+                self.frame_number += 1;
             }
             ScanlineRendererState::Vblank => {
                 if self.scanline == 241 && self.current_state_cycles == 1 {
@@ -257,7 +264,7 @@ impl PPU {
         }
 
         self.current_state_cycles += 1;
-        if (self.current_state_cycles == SCANLINE_CYCLE_DURATION) {
+        if self.current_state_cycles == SCANLINE_CYCLE_DURATION {
             self.current_state_cycles = 0;
             self.scanline = (self.scanline + 1) % 261;
         }
@@ -271,6 +278,11 @@ impl PPU {
             241..=260 => ScanlineRendererState::Vblank,
             _ => panic!("Scanline value not handled"),
         }
+    }
+
+    pub fn is_new_frame_ready(&self) -> bool {
+        return self.get_state() == ScanlineRendererState::PostRender
+            && self.current_state_cycles == 0;
     }
 }
 
