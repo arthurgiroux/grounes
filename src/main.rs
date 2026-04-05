@@ -23,8 +23,10 @@ struct GrounesApp {
     instruction_history: Vec<String>,
     load_error: Option<String>,
     show_debug_panel: bool,
+    step_by_step: bool,
     memory_editor: MemoryEditor,
     chr_texture: Option<egui::TextureHandle>,
+    frame_texture: Option<egui::TextureHandle>,
 }
 
 impl GrounesApp {
@@ -36,7 +38,8 @@ impl GrounesApp {
             step_count: "1".to_string(),
             instruction_history: vec![],
             load_error: None,
-            show_debug_panel: true,
+            show_debug_panel: false,
+            step_by_step: false,
             memory_editor: MemoryEditor::new()
                 .with_address_range("All", 0..0xFFFF)
                 .with_address_range("RAM", 0..0x1FFF)
@@ -44,6 +47,7 @@ impl GrounesApp {
                 .with_address_range("APU", 0x4000..0x401F)
                 .with_address_range("Cartridge", 0x4020..0xFFFF),
             chr_texture: None,
+            frame_texture: None,
         }
     }
 }
@@ -95,6 +99,11 @@ fn flag_char(p: StatusRegister, flag: StatusRegister) -> &'static str {
 
 impl eframe::App for GrounesApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.rom_loaded && !self.step_by_step {
+            self.emulator.step_frame();
+            ctx.request_repaint();
+        }
+
         // Top toolbar
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -118,6 +127,7 @@ impl eframe::App for GrounesApp {
                 }
                 ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.toggle_value(&mut self.show_debug_panel, "Debug");
+                    ui.checkbox(&mut self.step_by_step, "Step-by-step");
                 });
             });
         });
@@ -243,9 +253,36 @@ impl eframe::App for GrounesApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             let rect = ui.available_rect_before_wrap();
             ui.painter().rect_filled(rect, 0.0, Color32::BLACK);
-            ui.centered_and_justified(|ui| {
-                ui.colored_label(Color32::DARK_GRAY, "Screen output");
-            });
+
+            if let Some(frame_data) = &self.emulator.current_frame {
+                use grounes::ppu::PPU;
+                let pixels: Vec<Color32> = frame_data
+                    .chunks_exact(PPU::IMG_BPP)
+                    .map(|c| Color32::from_rgb(c[0], c[1], c[2]))
+                    .collect();
+                let image = egui::ColorImage::new([PPU::IMG_WIDTH, PPU::IMG_HEIGHT], pixels);
+                let texture = self.frame_texture.get_or_insert_with(|| {
+                    ctx.load_texture("nes_frame", image.clone(), egui::TextureOptions::NEAREST)
+                });
+                texture.set(image, egui::TextureOptions::NEAREST);
+
+                let available = ui.available_size();
+                let scale = (available.x / PPU::IMG_WIDTH as f32)
+                    .min(available.y / PPU::IMG_HEIGHT as f32)
+                    .floor()
+                    .max(1.0);
+                let size = egui::vec2(
+                    PPU::IMG_WIDTH as f32 * scale,
+                    PPU::IMG_HEIGHT as f32 * scale,
+                );
+                ui.centered_and_justified(|ui| {
+                    ui.add(egui::Image::new(&*texture).fit_to_exact_size(size));
+                });
+            } else {
+                ui.centered_and_justified(|ui| {
+                    ui.colored_label(Color32::DARK_GRAY, "Screen output");
+                });
+            }
         });
     }
 }

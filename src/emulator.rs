@@ -10,6 +10,7 @@ pub struct Emulator {
     ram: RAM,
     ppu: PPU,
     mapper: Option<Box<dyn Mapper>>,
+    pub current_frame: Option<Vec<u8>>,
 }
 
 impl Emulator {
@@ -19,6 +20,7 @@ impl Emulator {
             ram: RAM::new(2048),
             ppu: PPU::default(),
             mapper: None,
+            current_frame: None,
         }
     }
 
@@ -49,9 +51,23 @@ impl Emulator {
         let ppu_cycles = result.cycles * 3;
         for _ in 0..ppu_cycles {
             self.ppu.step();
+            if self.ppu.is_new_frame_ready() {
+                self.current_frame = Some(self.ppu.frame.clone());
+            }
         }
 
         result
+    }
+
+    pub fn step_frame(&mut self) {
+        // Clear the current frame then step until the PPU produces a new one.
+        self.current_frame = None;
+        for _ in 0..50_000 {
+            self.step();
+            if self.current_frame.is_some() {
+                break;
+            }
+        }
     }
 
     pub fn set_pc(&mut self, value: u16) {
