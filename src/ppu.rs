@@ -1,9 +1,10 @@
 mod ppu_control;
 mod ppu_mask;
+mod tile_fetcher;
 
 use crate::{
     mapper::Mapper,
-    ppu::{ppu_control::PPUControl, ppu_mask::PPUMask},
+    ppu::{ppu_control::PPUControl, ppu_mask::PPUMask, tile_fetcher::TileFetcher},
 };
 
 use bitflags::bitflags;
@@ -26,6 +27,11 @@ pub mod ppu_reg {
     pub const SCROLL: u16 = 0x2005;
     pub const ADDR: u16 = 0x2006;
     pub const DATA: u16 = 0x2007;
+}
+
+pub mod nametable {
+    pub const HEIGHT: usize = 30;
+    pub const WIDTH: usize = 32;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,10 +89,11 @@ pub struct PPU {
     oam_address: u8,
     status: PPUStatus,
     palette: Vec<u8>,
-    scanline: u32,
+    scanline: u16,
     current_state_cycles: u32,
     frame_number: u32,
     pub frame: Vec<u8>,
+    tile_fetcher: TileFetcher,
 }
 
 impl PPU {
@@ -138,6 +145,7 @@ impl Default for PPU {
             frame_number: 0,
             current_state_cycles: 0,
             frame: vec![0u8; PPU::IMG_HEIGHT * PPU::IMG_WIDTH * PPU::IMG_BPP],
+            tile_fetcher: TileFetcher::default(),
         }
     }
 }
@@ -231,7 +239,7 @@ impl PPU {
         }
     }
 
-    pub fn step(&mut self) {
+    pub fn step(&mut self, mapper: &mut dyn Mapper) {
         match self.get_state() {
             ScanlineRendererState::PreRender => {
                 if self.current_state_cycles == 1 {
@@ -242,13 +250,20 @@ impl PPU {
             }
             ScanlineRendererState::VisibleScanline => {
                 if self.current_state_cycles >= 1 && self.current_state_cycles <= 256 {
-                    // This is just dummy pixels for now
-                    let pix_id = (self.current_state_cycles - 1) as usize;
-                    let start_addr =
-                        (self.scanline as usize * PPU::IMG_WIDTH + pix_id) * PPU::IMG_BPP;
-                    self.frame[start_addr] = pix_id as u8; // red is pixel id
-                    self.frame[start_addr + 1] = self.scanline as u8; // green is scanline number
-                    self.frame[start_addr + 2] = self.frame_number as u8;
+                    let x = (self.current_state_cycles - 1) as u16;
+                    let nametable_addr = self.ppu_control.get_base_nametable_address();
+                    let pattern_base = self.ppu_control.get_background_pattern_table_address();
+                    let scanline = self.scanline;
+                    self.tile_fetcher.step(
+                        scanline,
+                        x,
+                        &self.vram,
+                        mapper,
+                        nametable_addr,
+                        pattern_base,
+                        &self.palette,
+                        &mut self.frame,
+                    );
                 }
                 // TODO
             }
