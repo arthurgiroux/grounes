@@ -50,7 +50,7 @@ impl Emulator {
         let result = self.cpu.step(&mut view);
         let ppu_cycles = result.cycles * 3;
         for _ in 0..ppu_cycles {
-            self.ppu.step();
+            self.ppu.step(mapper.as_mut());
             if self.ppu.is_new_frame_ready() {
                 self.current_frame = Some(self.ppu.frame.clone());
             }
