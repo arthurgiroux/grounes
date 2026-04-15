@@ -145,17 +145,13 @@ const SYSTEM_PALETTE: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
-pub(super) const NAMETABLE_SIZE: usize = 2048;
-const PALETTE_SIZE: usize = 32;
 
 pub struct PPU {
     write_latch: WriteLatch,
     ppu_mask: PPUMask,
     ppu_control: PPUControl,
-    // vram layout: [0..NAMETABLE_SIZE] nametable RAM, [NAMETABLE_SIZE..NAMETABLE_SIZE+PALETTE_SIZE] palette RAM
     vram: Vec<u8>,
     vram_read_buffer: u8,
-    scroll_x: u8,
     oam: Vec<u8>,
     oam_address: u8,
     status: PPUStatus,
@@ -166,6 +162,8 @@ pub struct PPU {
     tile_fetcher: TileFetcher,
     reg_v: PPURegV,
     reg_t: u16,
+    fine_x: u8,
+    palette: Vec<u8>
 }
 
 impl PPU {
@@ -193,7 +191,7 @@ impl PPU {
     fn update_scroll(&mut self, value: u8) {
         match self.write_latch.location {
             WriteLocation::First => {
-                self.scroll_x = (self.scroll_x & 0x01) | (value & 0b11111110);
+                self.fine_x = value & 0x07;
                 // Copy the 5 upper bits of the value to the last 5 bits of t
                 // t: ....... ...ABCDE <- d: ABCDE...
                 self.reg_t = (self.reg_t & 0xFFE0) | (value as u16 >> 3);
@@ -213,11 +211,11 @@ impl Default for PPU {
     fn default() -> Self {
         PPU {
             write_latch: WriteLatch::default(),
-            vram: vec![0u8; NAMETABLE_SIZE + PALETTE_SIZE],
+            vram: vec![0u8; 2048],
+            palette: vec![0u8; 64],
             vram_read_buffer: 0,
             ppu_mask: PPUMask::default(),
             ppu_control: PPUControl::default(),
-            scroll_x: 0,
             oam: vec![0u8; 256],
             oam_address: 0,
             status: PPUStatus::from_bits_truncate(0),
@@ -227,26 +225,28 @@ impl Default for PPU {
             frame: vec![0u8; PPU::IMG_HEIGHT * PPU::IMG_WIDTH * PPU::IMG_BPP],
             tile_fetcher: TileFetcher::default(),
             reg_v: PPURegV::default(),
-            reg_t: 0
+            reg_t: 0,
+            fine_x: 0
         }
     }
 }
 
 impl PPU {
     fn read_byte_ppu(&mut self, mapper: &mut dyn Mapper, addr: u16) -> u8 {
-        match addr {
+        match addr & 0x3FFF {
             0x0000..=0x1FFF => mapper.read_byte(crate::mapper::MapperSource::PPU, addr),
             0x2000..=0x3EFF => {
                 let value = self.vram_read_buffer;
-                let offset = (addr - 0x2000) as usize & (NAMETABLE_SIZE - 1);
+                let offset = (addr - 0x2000) as usize % self.vram.len();
                 self.vram_read_buffer = self.vram[offset];
                 value
             }
             0x3F00..=0x3FFF => {
-                let offset = (addr - 0x3F00) as usize & (PALETTE_SIZE - 1);
-                self.vram[NAMETABLE_SIZE + offset]
+                let offset = (addr - 0x3F00) as usize % self.palette.len();
+                self.palette[offset]
             }
-            _ => panic!("Requested address outside of PPU address space."),
+            _ => { 0x00 }
+            //_ => panic!("Requested address outside of PPU address space."),
         }
     }
 
@@ -256,22 +256,22 @@ impl PPU {
                 mapper.write_byte(crate::mapper::MapperSource::PPU, addr, value);
             }
             0x2000..=0x3EFF => {
-                let offset = (addr - 0x2000) as usize & (NAMETABLE_SIZE - 1);
+                let offset = (addr - 0x2000) as usize % self.vram.len();
                 self.vram[offset] = value;
             }
             0x3F00..=0x3FFF => {
-                let offset = (addr - 0x3F00) as usize & (PALETTE_SIZE - 1);
-                self.vram[NAMETABLE_SIZE + offset] = value;
+                let offset = (addr - 0x3F00) as usize % self.palette.len();
+                self.palette[offset] = value;
             }
-            _ => panic!("Requested address outside of PPU address space. {:2X}", addr),
+            _ => {}
+            //_ => panic!("Requested address outside of PPU address space. {:2X}", addr),
         }
     }
 
     pub fn read_byte(&mut self, mapper: &mut dyn Mapper, addr: u16) -> u8 {
         match addr {
             ppu_reg::DATA => {
-                let offset = (self.reg_v.get_value()) & (self.vram.len() as u16 - 1);
-                let value = self.vram[offset as usize];
+                let value = self.read_byte_ppu(mapper, self.reg_v.get_value());
                 self.reg_v.set_value(self.reg_v.get_value().wrapping_add(self.ppu_control.get_vram_address_increment()));
                 value
             }
@@ -300,8 +300,7 @@ impl PPU {
                 self.update_vram_address(value);
             }
             ppu_reg::DATA => {
-                let offset = (self.reg_v.get_value()) & (self.vram.len() as u16 - 1);
-                self.vram[offset as usize] = value;
+                self.write_byte_ppu(mapper, self.reg_v.get_value(), value);
                 self.reg_v.set_value(self.reg_v.get_value().wrapping_add(self.ppu_control.get_vram_address_increment()));
             }
             ppu_reg::SCROLL => {
@@ -326,14 +325,17 @@ impl PPU {
                     self.status.remove(PPUStatus::VBlank);
                 }
 
-                if (self.current_state_cycles >= 280 && self.current_state_cycles <= 304) {
+                // v: ....A.. ...BCDEF <- t: ....A.. ...BCDEF
+                if self.current_state_cycles == 257 {
+                    self.reg_v.set_value((self.reg_t & 0x041F) | (self.reg_v.get_value() & !0x041F));
+                }
+
+                if self.current_state_cycles >= 280 && self.current_state_cycles <= 304 {
                     // If rendering is enabled, at the end of vblank, shortly after the horizontal bits are copied from t to v at dot 257,
                     // the PPU will repeatedly copy the vertical bits from t to v from dots 280 to 304, completing the full initialization of v from t:
                     // v: GHIA.BC DEF..... <- t: GHIA.BC DEF.....
                     self.reg_v.set_value((self.reg_t & 0x7BE0) | (self.reg_v.get_value() & !0x7BE0));
                 }
-
-                // TODO
             }
             ScanlineRendererState::VisibleScanline => {
                 if self.current_state_cycles >= 1 && self.current_state_cycles <= 256 {
@@ -346,8 +348,14 @@ impl PPU {
                         let x_start = (self.current_state_cycles - 7) as usize;
                         let y = self.scanline as usize;
                         for (i, &palette_idx) in pixels.iter().enumerate() {
-                            let x = x_start + i;
-                            let system_color_idx = self.vram[NAMETABLE_SIZE + (palette_idx as usize & (PALETTE_SIZE - 1))] as usize;
+                            // Subtract fine_x to shift the viewport right by fine_x pixels.
+                            // wrapping_sub produces a value >= IMG_WIDTH for pixels that would
+                            // land before x=0, which the bounds check discards.
+                            let x = (x_start + i).wrapping_sub(self.fine_x as usize);
+                            if x >= PPU::IMG_WIDTH {
+                                continue;
+                            }
+                            let system_color_idx = self.palette[palette_idx as usize & 0x1F] as usize;
                             let (r, g, b) = SYSTEM_PALETTE[system_color_idx & 0x3F];
                             let frame_offset = (y * PPU::IMG_WIDTH + x) * PPU::IMG_BPP;
                             self.frame[frame_offset] = r;
@@ -371,7 +379,9 @@ impl PPU {
             }
             ScanlineRendererState::PostRender => {
                 // TODO
-                self.frame_number += 1;
+                if (self.current_state_cycles == 0) {
+                    self.frame_number += 1;
+                }
 
             }
             ScanlineRendererState::Vblank => {
@@ -476,32 +486,6 @@ mod tests {
         assert_eq!(ppu.reg_v.get_value(), 0x3F00);
     }
 
-    // update_scroll
-
-    #[test]
-    fn update_scroll_first_write_should_set_scroll_x() {
-        let mut ppu = PPU::default();
-        ppu.update_scroll(0xAA);
-        assert_eq!(ppu.scroll_x, 0xAA);
-    }
-
-    #[test]
-    fn update_scroll_second_write_should_set_scroll_y() {
-        let mut ppu = PPU::default();
-        ppu.update_scroll(0x00);
-        ppu.update_scroll(0xAA);
-        //assert_eq!(ppu.scroll_y, 0xAA);
-    }
-
-    #[test]
-    fn update_scroll_should_preserve_scroll_x_lsb() {
-        let mut ppu = PPU::default();
-        ppu.scroll_x = 0x01;
-        // 0xAB has bit 0 set, but update_scroll masks it out and preserves the existing LSB
-        ppu.update_scroll(0xAB);
-        assert_eq!(ppu.scroll_x, 0xAB); // 0xAA | preserved LSB 0x01 = 0xAB
-    }
-
     // read_byte STATUS
 
     #[test]
@@ -586,22 +570,6 @@ mod tests {
         assert!(ppu.ppu_control.is_vblank_nmi_enabled());
     }
 
-    #[test]
-    fn write_control_should_set_scroll_x_lsb() {
-        let mut ppu = PPU::default();
-        let mut mapper = MockMapper::new();
-        ppu.write_byte(&mut mapper, ppu_reg::CONTROL, 0x01);
-        assert_eq!(ppu.scroll_x & 0x01, 0x01);
-    }
-
-    #[test]
-    fn write_control_should_set_scroll_y_lsb() {
-        let mut ppu = PPU::default();
-        let mut mapper = MockMapper::new();
-        ppu.write_byte(&mut mapper, ppu_reg::CONTROL, 0x02);
-        //assert_eq!(ppu.scroll_y & 0x01, 0x01);
-    }
-
     // write_byte MASK
 
     #[test]
@@ -645,14 +613,6 @@ mod tests {
     }
 
     // write_byte SCROLL
-
-    #[test]
-    fn write_scroll_first_write_should_set_scroll_x() {
-        let mut ppu = PPU::default();
-        let mut mapper = MockMapper::new();
-        ppu.write_byte(&mut mapper, ppu_reg::SCROLL, 0xAA);
-        assert_eq!(ppu.scroll_x, 0xAA);
-    }
 
     #[test]
     fn write_scroll_second_write_should_set_scroll_y() {

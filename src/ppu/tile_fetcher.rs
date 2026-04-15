@@ -1,5 +1,5 @@
 use crate::mapper::{Mapper, MapperSource};
-use crate::ppu::{ppu_reg_v::PPURegV, NAMETABLE_SIZE};
+use crate::ppu::{ppu_reg_v::PPURegV};
 
 #[derive(Debug, Default)]
 enum TileFetcherState {
@@ -42,7 +42,7 @@ impl TileFetcher {
                 TileFetcherState::FetchNametable => {
                     // Source: https://www.nesdev.org/wiki/PPU_scrolling#Tile_and_attribute_fetching
                     let tile_addr = (0x2000 | (reg_value & 0x0FFF)) as usize;
-                    let offset = (tile_addr - 0x2000) & (NAMETABLE_SIZE - 1);
+                    let offset = (tile_addr - 0x2000) % vram.len();
                     self.nametable_byte = vram[offset];
                 }
                 TileFetcherState::FetchAttribute => {
@@ -56,7 +56,7 @@ impl TileFetcher {
                     let attr_addr =
                         (0x23C0 | (reg_value & 0x0C00) | ((reg_value >> 4) & 0x38) | ((reg_value >> 2) & 0x07))
                             as usize;
-                    let offset = (attr_addr - 0x2000) & (NAMETABLE_SIZE - 1);
+                    let offset = (attr_addr - 0x2000) % vram.len();
                     self.attribute_table_byte = vram[offset];
                 }
                 TileFetcherState::FetchPatternLow => {
