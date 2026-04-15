@@ -31,16 +31,6 @@ pub struct PPUControl {
 }
 
 impl PPUControl {
-    pub fn get_base_nametable_address(&self) -> u16 {
-        match self.value & 0b00000011 {
-            0 => 0x2000,
-            1 => 0x2400,
-            2 => 0x2800,
-            3 => 0x2C00,
-            _ => panic!("Unhandled base nametable address value"),
-        }
-    }
-
     pub fn get_vram_address_increment(&self) -> u16 {
         if self.value & 0b00000100 == 0 { 1 } else { 32 }
     }
@@ -95,26 +85,6 @@ impl Default for PPUControl {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn get_name_table_should_return_correct_value() {
-        assert_eq!(
-            (PPUControl { value: 0xF0 }).get_base_nametable_address(),
-            0x2000
-        );
-        assert_eq!(
-            (PPUControl { value: 0xF1 }).get_base_nametable_address(),
-            0x2400
-        );
-        assert_eq!(
-            (PPUControl { value: 0xF2 }).get_base_nametable_address(),
-            0x2800
-        );
-        assert_eq!(
-            (PPUControl { value: 0xF3 }).get_base_nametable_address(),
-            0x2C00
-        );
-    }
 
     #[test]
     fn get_vram_address_increment_should_return_correct_value() {
