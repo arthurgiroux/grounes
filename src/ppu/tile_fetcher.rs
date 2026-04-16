@@ -32,7 +32,7 @@ impl TileFetcher {
     ) -> Option<Vec<u8>> {
         let mut ret: Option<Vec<u8>> = None;
 
-        if self.current_state_cycles == 0 {
+        if self.current_state_cycles == 1 {
             let reg_value = reg_v.get_value();
             let fine_y = reg_v.get_fine_y();
             let coarse_x = reg_v.get_coarse_x();
