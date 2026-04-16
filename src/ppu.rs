@@ -5,7 +5,9 @@ mod tile_fetcher;
 
 use crate::{
     mapper::Mapper,
-    ppu::{ppu_control::PPUControl, ppu_mask::PPUMask, ppu_reg_v::PPURegV, tile_fetcher::TileFetcher},
+    ppu::{
+        ppu_control::PPUControl, ppu_mask::PPUMask, ppu_reg_v::PPURegV, tile_fetcher::TileFetcher,
+    },
 };
 
 use bitflags::bitflags;
@@ -145,7 +147,6 @@ const SYSTEM_PALETTE: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
-
 pub struct PPU {
     write_latch: WriteLatch,
     ppu_mask: PPUMask,
@@ -163,7 +164,7 @@ pub struct PPU {
     reg_v: PPURegV,
     reg_t: u16,
     fine_x: u8,
-    palette: Vec<u8>
+    palette: Vec<u8>,
 }
 
 impl PPU {
@@ -189,7 +190,8 @@ impl PPU {
     }
 
     fn is_rendering_enabled(&self) -> bool {
-        self.ppu_mask.is_background_rendering_enabled() || self.ppu_mask.is_sprite_rendering_enabled()
+        self.ppu_mask.is_background_rendering_enabled()
+            || self.ppu_mask.is_sprite_rendering_enabled()
     }
 
     fn update_scroll(&mut self, value: u8) {
@@ -203,8 +205,8 @@ impl PPU {
             WriteLocation::Second => {
                 // t: FGH..AB CDE..... <- d: ABCDEFGH
                 let value16 = value as u16;
-                self.reg_t = ((value16 & 0x07) << 12) | ((value16 & 0xF8) << 2) | (self.reg_t & 0x0C1F);
-
+                self.reg_t =
+                    ((value16 & 0x07) << 12) | ((value16 & 0xF8) << 2) | (self.reg_t & 0x0C1F);
             }
         }
         self.write_latch.toggle();
@@ -230,7 +232,7 @@ impl Default for PPU {
             tile_fetcher: TileFetcher::default(),
             reg_v: PPURegV::default(),
             reg_t: 0,
-            fine_x: 0
+            fine_x: 0,
         }
     }
 }
@@ -249,8 +251,7 @@ impl PPU {
                 let offset = (addr - 0x3F00) as usize % self.palette.len();
                 self.palette[offset]
             }
-            _ => { 0x00 }
-            //_ => panic!("Requested address outside of PPU address space."),
+            _ => 0x00, //_ => panic!("Requested address outside of PPU address space."),
         }
     }
 
@@ -267,8 +268,7 @@ impl PPU {
                 let offset = (addr - 0x3F00) as usize % self.palette.len();
                 self.palette[offset] = value;
             }
-            _ => {}
-            //_ => panic!("Requested address outside of PPU address space. {:2X}", addr),
+            _ => {} //_ => panic!("Requested address outside of PPU address space. {:2X}", addr),
         }
     }
 
@@ -276,7 +276,11 @@ impl PPU {
         match addr {
             ppu_reg::DATA => {
                 let value = self.read_byte_ppu(mapper, self.reg_v.get_value());
-                self.reg_v.set_value(self.reg_v.get_value().wrapping_add(self.ppu_control.get_vram_address_increment()));
+                self.reg_v.set_value(
+                    self.reg_v
+                        .get_value()
+                        .wrapping_add(self.ppu_control.get_vram_address_increment()),
+                );
                 value
             }
             ppu_reg::OAM_DATA => self.oam[self.oam_address as usize],
@@ -305,7 +309,11 @@ impl PPU {
             }
             ppu_reg::DATA => {
                 self.write_byte_ppu(mapper, self.reg_v.get_value(), value);
-                self.reg_v.set_value(self.reg_v.get_value().wrapping_add(self.ppu_control.get_vram_address_increment()));
+                self.reg_v.set_value(
+                    self.reg_v
+                        .get_value()
+                        .wrapping_add(self.ppu_control.get_vram_address_increment()),
+                );
             }
             ppu_reg::SCROLL => {
                 self.update_scroll(value);
@@ -332,14 +340,16 @@ impl PPU {
                 if self.is_rendering_enabled() {
                     // v: ....A.. ...BCDEF <- t: ....A.. ...BCDEF
                     if self.current_state_cycles == 257 {
-                        self.reg_v.set_value((self.reg_t & 0x041F) | (self.reg_v.get_value() & !0x041F));
+                        self.reg_v
+                            .set_value((self.reg_t & 0x041F) | (self.reg_v.get_value() & !0x041F));
                     }
 
                     if self.current_state_cycles >= 280 && self.current_state_cycles <= 304 {
                         // At the end of vblank, shortly after the horizontal bits are copied from t to v at dot 257,
                         // the PPU will repeatedly copy the vertical bits from t to v from dots 280 to 304, completing the full initialization of v from t:
                         // v: GHIA.BC DEF..... <- t: GHIA.BC DEF.....
-                        self.reg_v.set_value((self.reg_t & 0x7BE0) | (self.reg_v.get_value() & !0x7BE0));
+                        self.reg_v
+                            .set_value((self.reg_t & 0x7BE0) | (self.reg_v.get_value() & !0x7BE0));
                     }
                 }
             }
@@ -361,7 +371,8 @@ impl PPU {
                             if x >= PPU::IMG_WIDTH {
                                 continue;
                             }
-                            let system_color_idx = self.palette[palette_idx as usize & 0x1F] as usize;
+                            let system_color_idx =
+                                self.palette[palette_idx as usize & 0x1F] as usize;
                             let (r, g, b) = SYSTEM_PALETTE[system_color_idx & 0x3F];
                             let frame_offset = (y * PPU::IMG_WIDTH + x) * PPU::IMG_BPP;
                             self.frame[frame_offset] = r;
@@ -381,7 +392,8 @@ impl PPU {
                 if self.current_state_cycles == 257 && self.is_rendering_enabled() {
                     // The PPU copies all bits related to horizontal position from t to v:
                     // v: ....A.. ...BCDEF <- t: ....A.. ...BCDEF
-                    self.reg_v.set_value((self.reg_t & 0x041F) | (self.reg_v.get_value() & !0x041F));
+                    self.reg_v
+                        .set_value((self.reg_t & 0x041F) | (self.reg_v.get_value() & !0x041F));
                 }
                 // TODO
             }
@@ -390,7 +402,6 @@ impl PPU {
                 if (self.current_state_cycles == 0) {
                     self.frame_number += 1;
                 }
-
             }
             ScanlineRendererState::Vblank => {
                 if self.scanline == 241 && self.current_state_cycles == 1 {
