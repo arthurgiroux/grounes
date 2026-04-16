@@ -188,6 +188,10 @@ impl PPU {
         self.write_latch.toggle();
     }
 
+    fn is_rendering_enabled(&self) -> bool {
+        self.ppu_mask.is_background_rendering_enabled() || self.ppu_mask.is_sprite_rendering_enabled()
+    }
+
     fn update_scroll(&mut self, value: u8) {
         match self.write_latch.location {
             WriteLocation::First => {
@@ -325,16 +329,18 @@ impl PPU {
                     self.status.remove(PPUStatus::VBlank);
                 }
 
-                // v: ....A.. ...BCDEF <- t: ....A.. ...BCDEF
-                if self.current_state_cycles == 257 {
-                    self.reg_v.set_value((self.reg_t & 0x041F) | (self.reg_v.get_value() & !0x041F));
-                }
+                if self.is_rendering_enabled() {
+                    // v: ....A.. ...BCDEF <- t: ....A.. ...BCDEF
+                    if self.current_state_cycles == 257 {
+                        self.reg_v.set_value((self.reg_t & 0x041F) | (self.reg_v.get_value() & !0x041F));
+                    }
 
-                if self.current_state_cycles >= 280 && self.current_state_cycles <= 304 {
-                    // If rendering is enabled, at the end of vblank, shortly after the horizontal bits are copied from t to v at dot 257,
-                    // the PPU will repeatedly copy the vertical bits from t to v from dots 280 to 304, completing the full initialization of v from t:
-                    // v: GHIA.BC DEF..... <- t: GHIA.BC DEF.....
-                    self.reg_v.set_value((self.reg_t & 0x7BE0) | (self.reg_v.get_value() & !0x7BE0));
+                    if self.current_state_cycles >= 280 && self.current_state_cycles <= 304 {
+                        // At the end of vblank, shortly after the horizontal bits are copied from t to v at dot 257,
+                        // the PPU will repeatedly copy the vertical bits from t to v from dots 280 to 304, completing the full initialization of v from t:
+                        // v: GHIA.BC DEF..... <- t: GHIA.BC DEF.....
+                        self.reg_v.set_value((self.reg_t & 0x7BE0) | (self.reg_v.get_value() & !0x7BE0));
+                    }
                 }
             }
             ScanlineRendererState::VisibleScanline => {
@@ -345,7 +351,7 @@ impl PPU {
                             .step(&self.reg_v, pattern_base, &self.vram, mapper);
 
                     if let Some(pixels) = pixels {
-                        let x_start = (self.current_state_cycles - 7) as usize;
+                        let x_start = self.reg_v.get_coarse_x() as usize * 8;
                         let y = self.scanline as usize;
                         for (i, &palette_idx) in pixels.iter().enumerate() {
                             // Subtract fine_x to shift the viewport right by fine_x pixels.
@@ -362,18 +368,20 @@ impl PPU {
                             self.frame[frame_offset + 1] = g;
                             self.frame[frame_offset + 2] = b;
                         }
-                        self.reg_v.inc_coarse_x();
+                        if self.is_rendering_enabled() {
+                            self.reg_v.inc_coarse_x();
+                        }
                     }
 
-                    if (self.current_state_cycles == 256) {
+                    if self.current_state_cycles == 256 && self.is_rendering_enabled() {
                         self.reg_v.inc_y();
                     }
                 }
 
-                if (self.current_state_cycles == 257) {
-                // If rendering is enabled, the PPU copies all bits related to horizontal position from t to v:
-                // v: ....A.. ...BCDEF <- t: ....A.. ...BCDEF
-                self.reg_v.set_value((self.reg_t & 0x41F) | (self.reg_v.get_value() & !0x41F));
+                if self.current_state_cycles == 257 && self.is_rendering_enabled() {
+                    // The PPU copies all bits related to horizontal position from t to v:
+                    // v: ....A.. ...BCDEF <- t: ....A.. ...BCDEF
+                    self.reg_v.set_value((self.reg_t & 0x041F) | (self.reg_v.get_value() & !0x041F));
                 }
                 // TODO
             }

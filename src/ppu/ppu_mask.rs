@@ -15,35 +15,35 @@ pub struct PPUMask {
 }
 
 impl PPUMask {
-    pub fn is_greyscale(self) -> bool {
+    pub fn is_greyscale(&self) -> bool {
         self.value & 0x01 > 0
     }
 
-    pub fn show_background_in_leftmost_8_pixels(self) -> bool {
+    pub fn show_background_in_leftmost_8_pixels(&self) -> bool {
         self.value & 0x02 > 0
     }
 
-    pub fn show_sprites_in_leftmost_8_pixels(self) -> bool {
+    pub fn show_sprites_in_leftmost_8_pixels(&self) -> bool {
         self.value & 0x04 > 0
     }
 
-    pub fn is_background_rendering_enabled(self) -> bool {
+    pub fn is_background_rendering_enabled(&self) -> bool {
         self.value & 0x08 > 0
     }
 
-    pub fn is_sprite_rendering_enabled(self) -> bool {
+    pub fn is_sprite_rendering_enabled(&self) -> bool {
         self.value & 0x10 > 0
     }
 
-    pub fn is_red_emphasized(self) -> bool {
+    pub fn is_red_emphasized(&self) -> bool {
         self.value & 0x20 > 0
     }
 
-    pub fn is_green_emphasized(self) -> bool {
+    pub fn is_green_emphasized(&self) -> bool {
         self.value & 0x40 > 0
     }
 
-    pub fn is_blue_emphasized(self) -> bool {
+    pub fn is_blue_emphasized(&self) -> bool {
         self.value & 0x80 > 0
     }
 
