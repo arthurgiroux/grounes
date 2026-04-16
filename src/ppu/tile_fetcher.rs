@@ -1,5 +1,5 @@
 use crate::mapper::{Mapper, MapperSource};
-use crate::ppu::{ppu_reg_v::PPURegV};
+use crate::ppu::ppu_reg_v::PPURegV;
 
 #[derive(Debug, Default)]
 enum TileFetcherState {
@@ -53,9 +53,10 @@ impl TileFetcher {
                     //  || |||| +++------ high 3 bits of coarse Y (y/4)
                     //  || ++++---------- attribute offset (960 bytes)
                     //  ++--------------- nametable select
-                    let attr_addr =
-                        (0x23C0 | (reg_value & 0x0C00) | ((reg_value >> 4) & 0x38) | ((reg_value >> 2) & 0x07))
-                            as usize;
+                    let attr_addr = (0x23C0
+                        | (reg_value & 0x0C00)
+                        | ((reg_value >> 4) & 0x38)
+                        | ((reg_value >> 2) & 0x07)) as usize;
                     let offset = (attr_addr - 0x2000) % vram.len();
                     self.attribute_table_byte = vram[offset];
                 }
@@ -66,8 +67,10 @@ impl TileFetcher {
                         mapper.read_byte(MapperSource::PPU, tile_addr_low);
                 }
                 TileFetcherState::FetchPatternHigh => {
-                    let tile_addr_high =
-                        pattern_table_addr | ((self.nametable_byte as u16) << 4) | 0x08 | fine_y as u16;
+                    let tile_addr_high = pattern_table_addr
+                        | ((self.nametable_byte as u16) << 4)
+                        | 0x08
+                        | fine_y as u16;
                     self.pattern_table_tile_high =
                         mapper.read_byte(MapperSource::PPU, tile_addr_high);
                     let shift = ((coarse_y & 0x02) << 1) | (coarse_x & 0x02);
