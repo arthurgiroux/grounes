@@ -69,3 +69,124 @@ impl PPURegV {
         self.value = value;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn reg(value: u16) -> PPURegV {
+        let mut r = PPURegV::default();
+        r.set_value(value);
+        r
+    }
+
+    // --- Getters ---
+
+    #[test]
+    fn get_coarse_x_returns_zero_when_bits_0_to_4_are_clear() {
+        assert_eq!(reg(0x0000).get_coarse_x(), 0);
+    }
+
+    #[test]
+    fn get_coarse_x_returns_31_when_bits_0_to_4_are_set() {
+        assert_eq!(reg(0x001F).get_coarse_x(), 31);
+    }
+
+    #[test]
+    fn get_coarse_y_returns_zero_when_bits_5_to_9_are_clear() {
+        assert_eq!(reg(0x0000).get_coarse_y(), 0);
+    }
+
+    #[test]
+    fn get_coarse_y_returns_31_when_bits_5_to_9_are_set() {
+        assert_eq!(reg(0x03E0).get_coarse_y(), 31);
+    }
+
+    #[test]
+    fn get_fine_y_returns_zero_when_bits_12_to_14_are_clear() {
+        assert_eq!(reg(0x0000).get_fine_y(), 0);
+    }
+
+    #[test]
+    fn get_fine_y_returns_7_when_bits_12_to_14_are_set() {
+        assert_eq!(reg(0x7000).get_fine_y(), 7);
+    }
+
+    // --- inc_coarse_x ---
+
+    #[test]
+    fn inc_coarse_x_increments_normally() {
+        let mut r = reg(5); // coarse X = 5
+        r.inc_coarse_x();
+        assert_eq!(r.get_coarse_x(), 6);
+        assert_eq!(r.get_value() & 0x0400, 0); // nametable bit unchanged
+    }
+
+    #[test]
+    fn inc_coarse_x_wraps_at_31_and_switches_horizontal_nametable() {
+        // coarse X = 31, horizontal nametable bit clear
+        let mut r = reg(0x001F);
+        r.inc_coarse_x();
+        assert_eq!(r.get_coarse_x(), 0);
+        assert_eq!(r.get_value() & 0x0400, 0x0400); // bit 10 toggled on
+    }
+
+    #[test]
+    fn inc_coarse_x_wraps_at_31_and_toggles_nametable_bit_back_when_already_set() {
+        // coarse X = 31, horizontal nametable bit already set
+        let mut r = reg(0x041F);
+        r.inc_coarse_x();
+        assert_eq!(r.get_coarse_x(), 0);
+        assert_eq!(r.get_value() & 0x0400, 0); // bit 10 toggled back off
+    }
+
+    // --- inc_y ---
+
+    #[test]
+    fn inc_y_increments_fine_y_when_less_than_7() {
+        let mut r = reg(0x1000); // fine Y = 1, coarse Y = 0
+        r.inc_y();
+        assert_eq!(r.get_fine_y(), 2);
+        assert_eq!(r.get_coarse_y(), 0);
+    }
+
+    #[test]
+    fn inc_y_resets_fine_y_and_increments_coarse_y_when_fine_y_is_7() {
+        // fine Y = 7, coarse Y = 5
+        let mut r = reg(0x7000 | (5 << 5));
+        r.inc_y();
+        assert_eq!(r.get_fine_y(), 0);
+        assert_eq!(r.get_coarse_y(), 6);
+        assert_eq!(r.get_value() & 0x0800, 0); // vertical nametable unchanged
+    }
+
+    #[test]
+    fn inc_y_wraps_coarse_y_at_29_and_switches_vertical_nametable() {
+        // fine Y = 7, coarse Y = 29, vertical nametable bit clear
+        let mut r = reg(0x7000 | (29 << 5));
+        r.inc_y();
+        assert_eq!(r.get_fine_y(), 0);
+        assert_eq!(r.get_coarse_y(), 0);
+        assert_eq!(r.get_value() & 0x0800, 0x0800); // bit 11 toggled on
+    }
+
+    #[test]
+    fn inc_y_wraps_coarse_y_at_29_and_toggles_nametable_bit_back_when_already_set() {
+        // fine Y = 7, coarse Y = 29, vertical nametable bit already set
+        let mut r = reg(0x7000 | 0x0800 | (29 << 5));
+        r.inc_y();
+        assert_eq!(r.get_fine_y(), 0);
+        assert_eq!(r.get_coarse_y(), 0);
+        assert_eq!(r.get_value() & 0x0800, 0); // bit 11 toggled back off
+    }
+
+    #[test]
+    fn inc_y_wraps_coarse_y_at_31_without_switching_nametable() {
+        // fine Y = 7, coarse Y = 31 (out-of-bounds), vertical nametable bit clear
+        let mut r = reg(0x7000 | (31 << 5));
+        r.inc_y();
+        assert_eq!(r.get_fine_y(), 0);
+        assert_eq!(r.get_coarse_y(), 0);
+        assert_eq!(r.get_value() & 0x0800, 0); // nametable NOT switched
+    }
+}
