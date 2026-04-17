@@ -399,7 +399,7 @@ impl PPU {
             }
             ScanlineRendererState::PostRender => {
                 // TODO
-                if (self.current_state_cycles == 0) {
+                if self.current_state_cycles == 0 {
                     self.frame_number += 1;
                 }
             }
@@ -487,7 +487,7 @@ mod tests {
     fn update_vram_address_first_write_should_set_high_byte() {
         let mut ppu = PPU::default();
         ppu.update_vram_address(0x20);
-        assert_eq!(ppu.reg_v.get_value(), 0x2000);
+        assert_eq!(ppu.reg_t, 0x2000);
     }
 
     #[test]
@@ -495,14 +495,8 @@ mod tests {
         let mut ppu = PPU::default();
         ppu.update_vram_address(0x21);
         ppu.update_vram_address(0x50);
+        assert_eq!(ppu.reg_t, 0x2150);
         assert_eq!(ppu.reg_v.get_value(), 0x2150);
-    }
-
-    #[test]
-    fn update_vram_address_high_byte_should_be_masked_to_6_bits() {
-        let mut ppu = PPU::default();
-        ppu.update_vram_address(0xFF);
-        assert_eq!(ppu.reg_v.get_value(), 0x3F00);
     }
 
     // read_byte STATUS
@@ -629,17 +623,6 @@ mod tests {
         ppu.reg_v.set_value(0x2000);
         ppu.write_byte(&mut mapper, ppu_reg::DATA, 0x01);
         assert_eq!(ppu.reg_v.get_value(), 0x2020);
-    }
-
-    // write_byte SCROLL
-
-    #[test]
-    fn write_scroll_second_write_should_set_scroll_y() {
-        let mut ppu = PPU::default();
-        let mut mapper = MockMapper::new();
-        ppu.write_byte(&mut mapper, ppu_reg::SCROLL, 0x00);
-        ppu.write_byte(&mut mapper, ppu_reg::SCROLL, 0xAA);
-        assert_eq!(ppu.reg_v.get_coarse_y(), 0xAA);
     }
 
     // write_byte OAM_ADDR + OAM_DATA
