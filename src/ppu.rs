@@ -154,6 +154,7 @@ pub struct PPU {
     vram: Vec<u8>,
     vram_read_buffer: u8,
     oam: Vec<u8>,
+    secondary_oam: Vec<u8>,
     oam_address: u8,
     status: PPUStatus,
     scanline: u16,
@@ -223,6 +224,7 @@ impl Default for PPU {
             ppu_mask: PPUMask::default(),
             ppu_control: PPUControl::default(),
             oam: vec![0u8; 256],
+            secondary_oam: vec![0u8; 32],
             oam_address: 0,
             status: PPUStatus::from_bits_truncate(0),
             scanline: 261,
@@ -354,6 +356,15 @@ impl PPU {
                 }
             }
             ScanlineRendererState::VisibleScanline => {
+                // Clear the secondary OAM
+                if self.current_state_cycles >= 1 && self.current_state_cycles <= 64 {
+                    // On odd cycle in theory we should read from OAM and get 0xFF
+                    // On even cycle the write the value to the secondary OAM
+                    if self.current_state_cycles % 2 == 0 {
+                        self.secondary_oam[(self.current_state_cycles as usize - 1) / 2] = 0xFF;
+                    }
+                }
+
                 if self.current_state_cycles >= 1 && self.current_state_cycles <= 256 {
                     let pattern_base = self.ppu_control.get_background_pattern_table_address();
                     let pixels =
