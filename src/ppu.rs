@@ -664,4 +664,26 @@ mod tests {
         ppu.write_byte(&mut mapper, ppu_reg::OAM_DATA, 0x00);
         assert_eq!(ppu.oam_address, 0x00);
     }
+
+    // secondary OAM clearing
+
+    #[test]
+    fn visible_scanline_should_clear_secondary_oam_during_cycles_1_to_64() {
+        let mut ppu = PPU::default();
+        let mut mapper = MockMapper::new();
+        // Start at a visible scanline with a dirty secondary OAM
+        ppu.scanline = 0;
+        ppu.current_state_cycles = 0;
+        ppu.secondary_oam.fill(0x00);
+
+        // Step through cycles 0-64 (65 steps) to cover all 32 clearing writes
+        for _ in 0..65 {
+            ppu.step(&mut mapper);
+        }
+
+        assert!(
+            ppu.secondary_oam.iter().all(|&b| b == 0xFF),
+            "secondary OAM should be all 0xFF after cycles 1-64"
+        );
+    }
 }
