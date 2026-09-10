@@ -1,3 +1,4 @@
+use crate::controller::Controller;
 use crate::cpu::{CPU, StepResult};
 use crate::ines::parse_file;
 use crate::mapper::Mapper;
@@ -11,6 +12,8 @@ pub struct Emulator {
     ppu: PPU,
     mapper: Option<Box<dyn Mapper>>,
     pub current_frame: Option<Vec<u8>>,
+    controller1: Controller,
+    controller2: Controller,
 }
 
 impl Emulator {
@@ -21,6 +24,8 @@ impl Emulator {
             ppu: PPU::default(),
             mapper: None,
             current_frame: None,
+            controller1: Controller::default(),
+            controller2: Controller::default(),
         }
     }
 
@@ -36,6 +41,8 @@ impl Emulator {
             ram: &mut self.ram,
             mapper: mapper.as_mut(),
             ppu: &mut self.ppu,
+            controller1: &mut self.controller1,
+            controller2: &mut self.controller2,
         };
         self.cpu.power_up(&mut view);
     }
@@ -46,6 +53,8 @@ impl Emulator {
             ram: &mut self.ram,
             mapper: mapper.as_mut(),
             ppu: &mut self.ppu,
+            controller1: &mut self.controller1,
+            controller2: &mut self.controller2,
         };
         let result = self.cpu.step(&mut view);
         let ppu_cycles = result.cycles * 3;
@@ -80,6 +89,8 @@ impl Emulator {
             ram: &mut self.ram,
             mapper: mapper.as_mut(),
             ppu: &mut self.ppu,
+            controller1: &mut self.controller1,
+            controller2: &mut self.controller2,
         }
     }
 

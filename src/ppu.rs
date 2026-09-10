@@ -359,7 +359,7 @@ impl PPU {
                 // Clear the secondary OAM
                 if self.current_state_cycles >= 1 && self.current_state_cycles <= 64 {
                     // On odd cycle in theory we should read from OAM and get 0xFF
-                    // On even cycle the write the value to the secondary OAM
+                    // On even cycle we write the value to the secondary OAM
                     if self.current_state_cycles % 2 == 0 {
                         self.secondary_oam[(self.current_state_cycles as usize - 1) / 2] = 0xFF;
                     }

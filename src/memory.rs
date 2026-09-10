@@ -1,4 +1,5 @@
 use crate::{
+    controller::Controller,
     mapper::{Mapper, MapperSource},
     ppu::PPU,
 };
@@ -15,6 +16,7 @@ pub enum MemoryRegion {
     PPU,
     OpenBus,
     Cartridge,
+    Controller,
 }
 
 /// Pure address-to-region mapping. Returns (region, local_offset).
@@ -24,6 +26,7 @@ pub fn map_address(addr: u16) -> (MemoryRegion, u16) {
         0x0000..=0x1FFF => (MemoryRegion::Ram, addr % 2048),
         // Mirrored after 0x2007
         0x2000..=0x3FFF => (MemoryRegion::PPU, addr & 0x2007),
+        0x4016..=0x4017 => (MemoryRegion::Controller, addr),
         0x4020..=0xFFFF => (MemoryRegion::Cartridge, addr),
         _ => (MemoryRegion::OpenBus, 0),
     }
@@ -61,6 +64,8 @@ pub struct BusView<'a> {
     pub ram: &'a mut RAM,
     pub ppu: &'a mut PPU,
     pub mapper: &'a mut dyn Mapper,
+    pub controller1: &'a mut Controller,
+    pub controller2: &'a mut Controller,
 }
 
 impl MemoryBus for BusView<'_> {
@@ -70,6 +75,11 @@ impl MemoryBus for BusView<'_> {
             MemoryRegion::Ram => self.ram.read_byte(offset),
             MemoryRegion::PPU => self.ppu.read_byte(self.mapper, offset),
             MemoryRegion::Cartridge => self.mapper.read_byte(MapperSource::CPU, offset),
+            MemoryRegion::Controller => match addr {
+                0x4016 => self.controller1.get_latched_value_and_shift(),
+                0x4017 => self.controller2.get_latched_value_and_shift(),
+                _ => panic!("Unhandled controller address value"),
+            },
             MemoryRegion::OpenBus => 0,
         }
     }
@@ -80,6 +90,20 @@ impl MemoryBus for BusView<'_> {
             MemoryRegion::Ram => self.ram.write_byte(offset, value),
             MemoryRegion::Cartridge => self.mapper.write_byte(MapperSource::CPU, offset, value),
             MemoryRegion::PPU => self.ppu.write_byte(self.mapper, offset, value),
+            MemoryRegion::Controller => {
+                // If strobe is high, then the state will be continuously latched
+                if value & 0x01 > 0 {
+                    self.controller1.update_latch = true;
+                    self.controller2.update_latch = true;
+
+                    // We latch any value that have been stored so far
+                    self.controller1.update_latch_value();
+                    self.controller2.update_latch_value();
+                } else {
+                    self.controller1.update_latch = false;
+                    self.controller2.update_latch = false;
+                }
+            }
             _ => {}
         }
     }
