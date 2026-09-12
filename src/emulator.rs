@@ -12,8 +12,8 @@ pub struct Emulator {
     ppu: PPU,
     mapper: Option<Box<dyn Mapper>>,
     pub current_frame: Option<Vec<u8>>,
-    controller1: Controller,
-    controller2: Controller,
+    pub controller1: Controller,
+    pub controller2: Controller,
 }
 
 impl Emulator {

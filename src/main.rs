@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 use egui_memory_editor::MemoryEditor;
+use grounes::controller::ButtonFlags;
 use grounes::cpu::{StatusRegister, StepResult};
 use grounes::emulator::Emulator;
 
@@ -282,6 +283,28 @@ impl eframe::App for GrounesApp {
                 ui.centered_and_justified(|ui| {
                     ui.colored_label(Color32::DARK_GRAY, "Screen output");
                 });
+            }
+        });
+
+        ctx.input(|i| {
+            if i.key_pressed(egui::Key::Space) {
+                // Space bar was pressed this frame
+                println!("space bar pressed");
+                self.emulator
+                    .controller1
+                    .update_button_state(ButtonFlags::Start);
+            }
+            if i.key_pressed(egui::Key::ArrowUp) {
+                println!("arrow up");
+                self.emulator
+                    .controller1
+                    .update_button_state(ButtonFlags::Up);
+            }
+            if i.key_pressed(egui::Key::ArrowDown) {
+                println!("arrow down");
+                self.emulator
+                    .controller1
+                    .update_button_state(ButtonFlags::Down);
             }
         });
     }
