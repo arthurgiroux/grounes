@@ -1,7 +1,7 @@
 use crate::mapper::{Mapper, MapperSource};
 use crate::ppu::ppu_reg_v::PPURegV;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 enum TileFetcherState {
     #[default]
     FetchNametable,
@@ -112,5 +112,36 @@ impl TileFetcher {
             TileFetcherState::FetchPatternLow => TileFetcherState::FetchPatternHigh,
             TileFetcherState::FetchPatternHigh => TileFetcherState::FetchNametable,
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::assert_eq;
+
+    use super::*;
+
+    #[test]
+    fn state_transition_is_nametable_attribute_patternlow_patternhigh_nametable() {
+        let mut tile_fetcher = TileFetcher::default();
+        assert_eq!(tile_fetcher.current_state, TileFetcherState::FetchNametable);
+        tile_fetcher.current_state_cycles += 2;
+        tile_fetcher.transition_state();
+        assert_eq!(tile_fetcher.current_state, TileFetcherState::FetchAttribute);
+        tile_fetcher.current_state_cycles += 2;
+        tile_fetcher.transition_state();
+        assert_eq!(
+            tile_fetcher.current_state,
+            TileFetcherState::FetchPatternLow
+        );
+        tile_fetcher.current_state_cycles += 2;
+        tile_fetcher.transition_state();
+        assert_eq!(
+            tile_fetcher.current_state,
+            TileFetcherState::FetchPatternHigh
+        );
+        tile_fetcher.current_state_cycles += 2;
+        tile_fetcher.transition_state();
+        assert_eq!(tile_fetcher.current_state, TileFetcherState::FetchNametable);
     }
 }
