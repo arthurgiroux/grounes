@@ -72,6 +72,9 @@ pub struct CPU {
 
     /// The total number of cycles since the CPU was started
     cycle_count: u64,
+
+    /// True if a non-maskable interrupt should be handled
+    pending_non_maskable_interrupt: bool,
 }
 
 impl fmt::Display for CPU {
@@ -176,6 +179,7 @@ impl CPU {
             // These cycles are used to push the return address and processor status to the stack,
             // then load the reset vector from 0xFFFC/0xFFFD into the PC.
             cycle_count: 7,
+            pending_non_maskable_interrupt: false,
         }
     }
 
@@ -187,6 +191,20 @@ impl CPU {
     /// Step the CPU: fetch the next instruction and execute it
     /// returns the number of cycles it took
     pub fn step<T: MemoryBus>(&mut self, memory: &mut T) -> StepResult {
+
+        // If a non maskable interrupt is toggled we process it
+        if self.pending_non_maskable_interrupt {
+            let [low, high] = self.pc.to_le_bytes();
+            self.sp.push_byte(memory, high);
+            self.sp.push_byte(memory, low);
+            self.p.remove(StatusRegister::Break);
+            self.sp.push_byte(memory, self.p.bits());
+            let nmi_handler_low = memory.read_byte(0xFFFA);
+            let nmi_handler_high = memory.read_byte(0xFFFB);
+            self.pc = u16::from_le_bytes([nmi_handler_low, nmi_handler_high]);
+            self.pending_non_maskable_interrupt = false;
+        }
+
         // When changing the "disable interrupt" flag through some instruction,
         // The change is delayed to the next instruction.
         if let Some(value) = self.pending_interrupt_flag_change {
