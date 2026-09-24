@@ -287,25 +287,27 @@ impl eframe::App for GrounesApp {
         });
 
         ctx.input(|i| {
-            if i.key_pressed(egui::Key::Space) {
-                // Space bar was pressed this frame
-                println!("space bar pressed");
-                self.emulator
-                    .controller1
-                    .update_button_state(ButtonFlags::Start);
+            let mut buttons = ButtonFlags::empty();
+
+            let mappings = [
+                (egui::Key::ArrowUp, ButtonFlags::Up),
+                (egui::Key::ArrowDown, ButtonFlags::Down),
+                (egui::Key::ArrowLeft, ButtonFlags::Left),
+                (egui::Key::ArrowRight, ButtonFlags::Right),
+                (egui::Key::A, ButtonFlags::A),
+                (egui::Key::B, ButtonFlags::B),
+                (egui::Key::Space, ButtonFlags::Select),
+                (egui::Key::Enter, ButtonFlags::Start),
+            ];
+
+            for (key, flag) in mappings {
+                if i.key_down(key) {
+                    println!("{} pressed", key.name());
+                    buttons |= flag;
+                }
             }
-            if i.key_pressed(egui::Key::ArrowUp) {
-                println!("arrow up");
-                self.emulator
-                    .controller1
-                    .update_button_state(ButtonFlags::Up);
-            }
-            if i.key_pressed(egui::Key::ArrowDown) {
-                println!("arrow down");
-                self.emulator
-                    .controller1
-                    .update_button_state(ButtonFlags::Down);
-            }
+
+            self.emulator.controller1.update_button_state(buttons);
         });
     }
 }
