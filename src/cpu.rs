@@ -140,8 +140,8 @@ pub enum InterruptType {
 impl InterruptType {
     pub const fn vector_address(&self) -> u16 {
         match self {
-            InterruptType::NMI   => 0xFFFA,
-            InterruptType::IRQ   => 0xFFFE,
+            InterruptType::NMI => 0xFFFA,
+            InterruptType::IRQ => 0xFFFE,
         }
     }
 }
@@ -212,7 +212,6 @@ impl CPU {
     /// Step the CPU: fetch the next instruction and execute it
     /// returns the number of cycles it took
     pub fn step<T: MemoryBus>(&mut self, memory: &mut T) -> StepResult {
-
         // An NMI sequence takes 7 cycles and is its own "instruction": return so the
         // emulator can clock the PPU for those cycles before the handler runs.
         if self.pending_non_maskable_interrupt {
@@ -916,7 +915,13 @@ impl CPU {
         None
     }
 
-    fn handle_interrupt<T: MemoryBus>(&mut self, memory: &mut T, pc: u16, interrupt_type: InterruptType, break_flag_value: bool) {
+    fn handle_interrupt<T: MemoryBus>(
+        &mut self,
+        memory: &mut T,
+        pc: u16,
+        interrupt_type: InterruptType,
+        break_flag_value: bool,
+    ) {
         // When we get an interrupt we push the current PC and processor flags to the stack.
         let [low, high] = pc.to_le_bytes();
         self.sp.push_byte(memory, high);
@@ -929,7 +934,10 @@ impl CPU {
 
         let handler_base_addr = interrupt_type.vector_address();
 
-        self.pc = u16::from_le_bytes([memory.read_byte(handler_base_addr), memory.read_byte(handler_base_addr + 1)]);
+        self.pc = u16::from_le_bytes([
+            memory.read_byte(handler_base_addr),
+            memory.read_byte(handler_base_addr + 1),
+        ]);
         self.p.set(StatusRegister::InterruptDisabled, true);
     }
 
