@@ -131,6 +131,21 @@ pub struct StackPointer {
     pub value: u8,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InterruptType {
+    NMI,
+    IRQ,
+}
+
+impl InterruptType {
+    pub const fn vector_address(&self) -> u16 {
+        match self {
+            InterruptType::NMI   => 0xFFFA,
+            InterruptType::IRQ   => 0xFFFE,
+        }
+    }
+}
+
 /// An "Empty Descending" stack pointer.
 /// The stack pointer points to the last valid data item pushed onto the stack.
 impl StackPointer {
@@ -183,6 +198,12 @@ impl CPU {
         }
     }
 
+    /// Called by the emulator when the PPU asserts the NMI line.
+    /// The interrupt is serviced at the start of the next `step()`.
+    pub fn request_nmi(&mut self) {
+        self.pending_non_maskable_interrupt = true;
+    }
+
     pub fn power_up<T: MemoryBus>(&mut self, memory: &mut T) {
         // Reference value: https://www.nesdev.org/wiki/CPU_power_up_state
         self.pc = u16::from_le_bytes([memory.read_byte(0xFFFC), memory.read_byte(0xFFFD)]);
@@ -192,17 +213,16 @@ impl CPU {
     /// returns the number of cycles it took
     pub fn step<T: MemoryBus>(&mut self, memory: &mut T) -> StepResult {
 
-        // If a non maskable interrupt is toggled we process it
+        // An NMI sequence takes 7 cycles and is its own "instruction": return so the
+        // emulator can clock the PPU for those cycles before the handler runs.
         if self.pending_non_maskable_interrupt {
-            let [low, high] = self.pc.to_le_bytes();
-            self.sp.push_byte(memory, high);
-            self.sp.push_byte(memory, low);
-            self.p.remove(StatusRegister::Break);
-            self.sp.push_byte(memory, self.p.bits());
-            let nmi_handler_low = memory.read_byte(0xFFFA);
-            let nmi_handler_high = memory.read_byte(0xFFFB);
-            self.pc = u16::from_le_bytes([nmi_handler_low, nmi_handler_high]);
+            self.handle_interrupt(memory, self.pc, InterruptType::NMI, false);
             self.pending_non_maskable_interrupt = false;
+            self.cycle_count += 7;
+            return StepResult {
+                opcode: None,
+                cycles: 7,
+            };
         }
 
         // When changing the "disable interrupt" flag through some instruction,
@@ -891,21 +911,26 @@ impl CPU {
     }
 
     fn instr_break<T: MemoryBus>(&mut self, memory: &mut T) -> Option<u8> {
-        let pc_value = self.pc.wrapping_add(1);
-        // When we get an IRQ we push the current PC and processor flags to the stack.
-        let [low, high] = pc_value.to_le_bytes();
+        self.handle_interrupt(memory, self.pc.wrapping_add(1), InterruptType::IRQ, true);
+
+        None
+    }
+
+    fn handle_interrupt<T: MemoryBus>(&mut self, memory: &mut T, pc: u16, interrupt_type: InterruptType, break_flag_value: bool) {
+        // When we get an interrupt we push the current PC and processor flags to the stack.
+        let [low, high] = pc.to_le_bytes();
         self.sp.push_byte(memory, high);
         self.sp.push_byte(memory, low);
 
-        // The break flag must be set on the flags that are pushed to the stack, not the flags in the CPU
+        // The break flag must be set or unset on the flags that are pushed to the stack, not the flags in the CPU
         let mut current_flag = self.p.clone();
-        current_flag.set(StatusRegister::Break, true);
+        current_flag.set(StatusRegister::Break, break_flag_value);
         self.sp.push_byte(memory, current_flag.bits());
 
-        self.pc = u16::from_le_bytes([memory.read_byte(0xFFFE), memory.read_byte(0xFFFF)]);
-        self.p.set(StatusRegister::InterruptDisabled, true);
+        let handler_base_addr = interrupt_type.vector_address();
 
-        None
+        self.pc = u16::from_le_bytes([memory.read_byte(handler_base_addr), memory.read_byte(handler_base_addr + 1)]);
+        self.p.set(StatusRegister::InterruptDisabled, true);
     }
 
     fn instr_return_from_interrupt<T: MemoryBus>(&mut self, memory: &mut T) -> Option<u8> {

@@ -13,7 +13,9 @@ pub struct Emulator {
     mapper: Option<Box<dyn Mapper>>,
     pub current_frame: Option<Vec<u8>>,
     pub controller1: Controller,
-    pub controller2: Controller,
+    controller2: Controller,
+    /// Previous level of the PPU's NMI line, for rising-edge detection.
+    prev_nmi_signal: bool,
 }
 
 impl Emulator {
@@ -26,6 +28,7 @@ impl Emulator {
             current_frame: None,
             controller1: Controller::default(),
             controller2: Controller::default(),
+            prev_nmi_signal: false,
         }
     }
 
@@ -63,6 +66,13 @@ impl Emulator {
             if self.ppu.is_new_frame_ready() {
                 self.current_frame = Some(self.ppu.frame.clone());
             }
+            // The CPU NMI input is edge-triggered: fire on each rising edge of
+            // the PPU's NMI line (vblank start, or enabling NMI mid-vblank).
+            let nmi = self.ppu.nmi_signal();
+            if nmi && !self.prev_nmi_signal {
+                self.cpu.request_nmi();
+            }
+            self.prev_nmi_signal = nmi;
         }
 
         result
