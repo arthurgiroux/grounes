@@ -442,6 +442,13 @@ impl PPU {
         return self.get_state() == ScanlineRendererState::PostRender
             && self.current_state_cycles == 0;
     }
+
+    /// Level of the NMI line: asserted while the VBlank flag is set AND NMI is
+    /// enabled in PPUCTRL. The CPU triggers on the rising edge of this signal,
+    /// so writing $2000 to enable NMI mid-vblank also fires an NMI.
+    pub fn nmi_signal(&self) -> bool {
+        self.status.contains(PPUStatus::VBlank) && self.ppu_control.is_vblank_nmi_enabled()
+    }
 }
 
 #[cfg(test)]
