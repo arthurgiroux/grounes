@@ -81,11 +81,8 @@ impl Emulator {
     pub fn step_frame(&mut self) {
         // Clear the current frame then step until the PPU produces a new one.
         self.current_frame = None;
-        for _ in 0..50_000 {
+        while self.current_frame.is_none() {
             self.step();
-            if self.current_frame.is_some() {
-                break;
-            }
         }
     }
 
