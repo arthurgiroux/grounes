@@ -8,7 +8,13 @@ use eframe::egui::{self, Color32, Layout};
 use grounes::memory::MemoryBus;
 
 fn main() -> eframe::Result {
-    let native_options = eframe::NativeOptions::default();
+    let native_options = eframe::NativeOptions {
+        // This fixes a crash on Mac Tahoe when closing the app
+        // A fix has been merged in winit 0.31 but egui is not using this version yet.
+        // Once egui upgrades to this version we can revert this change.
+        run_and_return: false,
+        ..Default::default()
+    };
     eframe::run_native(
         "Grounes",
         native_options,
