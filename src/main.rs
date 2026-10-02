@@ -99,14 +99,16 @@ fn flag_char(p: StatusRegister, flag: StatusRegister) -> &'static str {
 }
 
 impl eframe::App for GrounesApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+
         if self.rom_loaded && !self.step_by_step {
             self.emulator.step_frame();
             ctx.request_repaint();
         }
 
         // Top toolbar
-        egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
+        egui::Panel::top("toolbar").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label("ROM:");
                 ui.text_edit_singleline(&mut self.rom_path);
@@ -135,10 +137,10 @@ impl eframe::App for GrounesApp {
 
         // Right debug panel
         if self.show_debug_panel {
-            egui::SidePanel::right("debug_panel")
+            egui::Panel::right("debug_panel")
                 .resizable(true)
-                .min_width(300.0)
-                .show(ctx, |ui| {
+                .min_size(300.0)
+                .show(ui, |ui| {
                     if !self.rom_loaded {
                         ui.label("Load a ROM to see debug info.");
                         return;
@@ -251,7 +253,7 @@ impl eframe::App for GrounesApp {
         }
 
         // Central output area
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             let rect = ui.available_rect_before_wrap();
             ui.painter().rect_filled(rect, 0.0, Color32::BLACK);
 
